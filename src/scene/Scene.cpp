@@ -373,10 +373,7 @@ bool ARX_SCENE_PORTAL_ClipIO(Entity * io, const Vec3f & position) {
 		return false;
 
 	if(portals) {
-		Vec3f posi;
-		posi.x=position.x;
-		posi.y=position.y-60; //20
-		posi.z=position.z;
+		Vec3f posi = position + Vec3f(0, -60, 0); // -20 ?
 		long room_num;
 
 		if(io) {
@@ -547,8 +544,11 @@ static long ARX_PORTALS_GetRoomNumForCamera(float * height) {
 	float dist=0.f;
 
 	while(dist<=20.f) {
-		float vvv = glm::radians(ACTIVECAM->angle.getPitch());
-		ep=CheckInPoly(ACTIVECAM->orgTrans.pos + Vec3f(std::sin(vvv) * dist, 0.f, -std::cos(vvv) * dist));
+		
+		Vec3f tmpPos = ACTIVECAM->orgTrans.pos;
+		tmpPos += angleToVectorXZ_180offset(ACTIVECAM->angle.getPitch()) * dist;
+		
+		ep = CheckInPoly(tmpPos);
 
 		if(ep && ep->room > -1) {
 			if(height)
@@ -793,8 +793,8 @@ static void CreateScreenFrustrum(EERIE_FRUSTRUM * frustrum) {
 }
 
 void RoomDrawRelease() {
-	RoomDrawList.resize(0);
-	RoomDraw.resize(0);
+	RoomDrawList.clear();
+	RoomDraw.clear();
 }
 
 static void RoomFrustrumAdd(size_t num, const EERIE_FRUSTRUM & fr) {
@@ -1348,6 +1348,8 @@ static void ARX_PORTALS_Frustrum_RenderRoom_TransparencyTSoftCull(long room_num)
 static void ARX_PORTALS_Frustrum_ComputeRoom(size_t roomIndex,
                                              const EERIE_FRUSTRUM & frustrum) {
 	
+	arx_assert(roomIndex < portals->rooms.size());
+	
 	if(RoomDraw[roomIndex].count == 0) {
 		RoomDrawList.push_back(roomIndex);
 	}
@@ -1468,6 +1470,8 @@ void ARX_SCENE_Update() {
 		for(size_t i = 0; i < RoomDrawList.size(); i++) {
 			ARX_PORTALS_Frustrum_RenderRoomTCullSoft(RoomDrawList[i], RoomDraw[RoomDrawList[i]].frustrum, tim);
 		}
+	} else {
+		RoomDrawRelease();
 	}
 
 	ARX_THROWN_OBJECT_Manage(checked_range_cast<unsigned long>(framedelay));

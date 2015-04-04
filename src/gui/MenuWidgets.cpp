@@ -431,13 +431,10 @@ bool Menu2_Render() {
 
 	GRenderer->SetRenderState(Renderer::Fog, false);
 	GRenderer->SetRenderState(Renderer::DepthWrite, false);
-	GRenderer->SetRenderState(Renderer::DepthTest, false);
 	GRenderer->SetCulling(Renderer::CullNone);
 	pMenuCursor->DrawCursor();
 
 	if(pTextureLoadRender) {
-		GRenderer->SetRenderState(Renderer::DepthTest, false);
-		
 		Vec2f size = Vec2f(pTextureLoad->size());
 		
 		Vec2f offset = Vec2f(0, 0);
@@ -2062,13 +2059,11 @@ void CWindowMenuConsole::Render() {
 	// Console display
 	GRenderer->SetRenderState(Renderer::AlphaBlending, true);
 	GRenderer->SetBlendFunc(Renderer::BlendZero, Renderer::BlendInvSrcColor);
-	GRenderer->SetRenderState(Renderer::DepthTest, false);
 
 	EERIEDrawBitmap2(Rectf(Vec2f(m_pos.x, m_pos.y),
 	                 RATIO_X(pTexBackground->m_dwWidth), RATIO_Y(pTexBackground->m_dwHeight)),
 	                 0, pTexBackground, Color::white);
 
-	GRenderer->SetRenderState(Renderer::DepthTest, true);
 	GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 	
@@ -2822,7 +2817,7 @@ MenuCursor::MenuCursor()
 	bMouseOver=false;
 	
 	m_currentFrame=0;
-	lFrameDiff=0;
+	lFrameDiff = 0.f;
 }
 
 MenuCursor::~MenuCursor()
@@ -2977,13 +2972,11 @@ void MenuCursor::DrawCursor() {
 	
 	DrawLine2D(10.f, Color3f(.725f, .619f, 0.56f));
 	
-	GRenderer->SetRenderState(Renderer::DepthTest, false);
 	DrawOneCursor(GInput->getMousePosAbs());
-	GRenderer->SetRenderState(Renderer::DepthTest, true);
 
-	lFrameDiff += checked_range_cast<long>(ARXDiffTimeMenu);
+	lFrameDiff += ARXDiffTimeMenu;
 
-	if(lFrameDiff > 70) {
+	if(lFrameDiff > 70.f) {
 		if(bMouseOver) {
 			if(m_currentFrame < 4) {
 				m_currentFrame++;
@@ -3004,7 +2997,7 @@ void MenuCursor::DrawCursor() {
 			}
 		}
 
-		lFrameDiff=0;
+		lFrameDiff = 0.f;
 	}
 
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);

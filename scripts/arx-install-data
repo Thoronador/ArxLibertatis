@@ -192,9 +192,9 @@ abspath() {
 # Too bad we can't just use readlink -f
 if have realpath ; then
 	canonicalize() { realpath "$1" ; }
-else if have grealpath ; then
+elif have grealpath ; then
 	canonicalize() { grealpath "$1" ; }
-else if have greadlink ; then
+elif have greadlink ; then
 	canonicalize() { greadlink -f "$1" ; }
 else
 	canonicalize() {
@@ -209,7 +209,7 @@ else
 		echo "$(pwd -P)/$_canonicalize_file"
 		cd "$_canonicalize_old_pwd"
 	}
-fi ; fi ; fi
+fi
 
 cleanup_functions='' # List of functions to be run on exit
 
@@ -317,7 +317,7 @@ list_append() {
 	eval "[ -z \"\$$1__list_count\" ] && $1__list_count=0"
 	eval "_list_count=\$$1__list_count"
 	eval "$1__list_comment_$_list_count=\"\$3\""
-	eval "$1__list_count=\$((\$$1__list_count + 1))"
+	eval "$1__list_count=\$(($1__list_count + 1))"
 }
 
 # Append one list to another, preserving comments.
@@ -329,7 +329,7 @@ list_merge() {
 		_list_merge_i=0
 		for _list_merge_entry in $_list_append ; do
 			list_append $1 \"\$_list_merge_entry\" \"\$(list_comment $2 \$_list_merge_i)\"
-			_list_merge_i=\$((\$_list_merge_i + 1))
+			_list_merge_i=\$((_list_merge_i + 1))
 		done
 	"
 }
@@ -510,7 +510,7 @@ print_help_or() {
 			[ -z \"\$_print_help_or_color\" ] || puts \"\$reset\"
 			_print_help_or_comment=\"\$(list_comment \$_print_help_or_var \$_print_help_or_i)\"
 			[ -z \"\$_print_help_or_comment\" ] || printf ' (%s)' \"\$_print_help_or_comment\"
-			_print_help_or_i=\$((\$_print_help_or_i + 1))
+			_print_help_or_i=\$((_print_help_or_i + 1))
 		done
 	"
 }
@@ -527,14 +527,14 @@ print_help_list() {
 		_print_help_list_i=0
 		for _print_help_list_entry in $_print_help_list_list ; do
 			case \"\$_print_help_list_prefix\" in
-				*%*) printf \"\$_print_help_list_prefix\" \$((\$_print_help_list_i + 1)) ;;
+				*%*) printf \"\$_print_help_list_prefix\" \$((_print_help_list_i + 1)) ;;
 				*)   puts \"\$_print_help_list_prefix\"
 			esac
 			printf \"%s\${reset}\" \"\$_print_help_list_entry\"
 			_print_help_list_comment=\"\$(list_comment \$_print_help_list_var \$_print_help_list_i)\"
 			[ -z \"\$_print_help_list_comment\" ] || printf ' (%s)' \"\$_print_help_list_comment\"
 			printf '\n'
-			_print_help_list_i=\$((\$_print_help_list_i + 1))
+			_print_help_list_i=\$((_print_help_list_i + 1))
 		done
 	"
 }
@@ -688,7 +688,7 @@ or, if none exists, the first directory that can be created:
 		eval "set -- $(to_list "$data_dir_suffixes")"
 		for suffix ; do
 			printf "   2.%d. ${dim_cyan}%s${reset}\\n" $i "$prefix/$suffix"
-			i=$(($i + 1))
+			i=$((i + 1))
 		done
 	done
 print "3. \"\${XDG_DATA_HOME:-\"\$HOME/.local/share\"}\" / \"$user_dir_suffixes\""
@@ -696,7 +696,7 @@ print "3. \"\${XDG_DATA_HOME:-\"\$HOME/.local/share\"}\" / \"$user_dir_suffixes\
 	eval "set -- $(to_list "$user_dir_suffixes")"
 	for suffix ; do
 		printf "   3.%d. ${dim_cyan}%s${reset}\\n" $i "$data_home/$suffix"
-			i=$(($i + 1))
+			i=$((i + 1))
 	done
 	print
 	exit $true
@@ -716,7 +716,7 @@ while [ $# -gt 0 ] ; do
 		-p|--patch)       shift ; patchfile="$1"                  ; patch=1 ;;
 		--patch-jp=*)             patchfile_jp="${1#--patch-jp=}" ; patch=1 ;;
 		--patch-jp)       shift ; patchfile_jp="$1"               ; patch=1 ;;
-		-v|--verify)                                              install=0 ;;
+		-v|--verify)                                      install=0 patch=0 ;;
 		-n|--no-patch)    [ -z "$patchfile" ] && [ -z "$patchfile_jp" ] && patch=0
 		                  probe_patch=0   ;;
 		-b|--batch)       batch=1         ;;
@@ -730,8 +730,8 @@ while [ $# -gt 0 ] ; do
 		-*)               print_help "Uknown option: $1" ;;
 		*)
 			if [ -z "${sourcefile-}" ] && [ $install = 1 ] ; then sourcefile="$1"
-			else if [ -z "${datadir-}"    ] ; then datadir="$1"
-			else print_help "Too many options: $1" ; fi ;fi
+			elif [ -z "${datadir-}"    ] ; then datadir="$1"
+			else print_help "Too many options: $1" ; fi
 	esac
 	[ -z "${1-}" ] && print_help "Expected more options"
 	shift;
@@ -852,11 +852,11 @@ $message"
 		print "Use the --cli option for an interactive command-line interface."
 	fi
 	
-else if [ ! "$_arx_install_data_force_cli" = 1 ] ; then
+elif [ ! "$_arx_install_data_force_cli" = 1 ] ; then
 	
 	print "Enabling CLI mode, use the --gui option for a graphical interface."
 	
-fi ; fi
+fi
 
 #----------------------------------------------------------------------------------------#
 # Functions for controlling an asynchronous process via stdin
@@ -874,7 +874,7 @@ pipe_create() {
 	pipe_file="$(mktemp -u "$tempdir/arx-install-data.pipe.XXXXX")"
 	if mkfifo -m 600 "$pipe_file" 2> /dev/null ; then
 		# Fast communication via a FIFO
-		cat "$pipe_file" | "$@" &
+		"$@" < "$pipe_file" &
 		pipe_pid="$!"
 	else
 		# Fallback via regular file, may use polling
@@ -946,7 +946,7 @@ zenity_run() {
 # Create the main progress window.
 # Usage: dialog_create
 dialog_create() {
-	pipe_create zenity --title "$_dialog_title$1" --width 450 --progress
+	pipe_create zenity --title "$_dialog_title" --width 450 --progress
 }
 
 # Destroy the main progress window.
@@ -1204,7 +1204,7 @@ Xdialog_run() {
 # Usage: dialog_create
 dialog_create() {
 	_Xdialog_width='WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW'
-	pipe_create Xdialog --left --title "$_dialog_title$1" --gauge "$_Xdialog_width" 0 0
+	pipe_create Xdialog --left --title "$_dialog_title" --gauge "$_Xdialog_width" 0 0
 }
 
 # Destroy the main progress window.
@@ -1570,7 +1570,7 @@ user_select_entry() {
 			
 			# Use 'command (file)' if comment available or 'file' otherwise
 			_user_select_entry_comment="$(
-				list_comment "$_user_select_entry_lname" "$(($_user_select_entry_i - 1))"
+				list_comment "$_user_select_entry_lname" "$((_user_select_entry_i - 1))"
 			)"
 			if [ -z "$_user_select_entry_comment" ] ; then
 				_user_select_entry_label="$_user_select_entry_color2$_user_select_entry$reset"
@@ -1586,7 +1586,7 @@ user_select_entry() {
 			# Remeber the file for the tag
 			eval "_user_select_entry_$_user_select_entry_i=\"\$_user_select_entry\""
 			
-			_user_select_entry_i=$(($_user_select_entry_i + 1))
+			_user_select_entry_i=$((_user_select_entry_i + 1))
 		done
 		
 		# Add entries for custom files/diectories
@@ -1598,12 +1598,12 @@ user_select_entry() {
 			if [ $_user_select_entry_t = --any ] || [ $_user_select_entry_t = --file ] ; then
 				list_append _user_select_entry_tlist $_user_select_entry_ii
 				list_append _user_select_entry_tlist "Select file to $_user_select_entry_verb..."
-				_user_select_entry_ii=$(($_user_select_entry_ii + 1))
+				_user_select_entry_ii=$((_user_select_entry_ii + 1))
 			fi
 			if [ $_user_select_entry_t = --any ] || [ $_user_select_entry_t = --dir ] ; then
 				list_append _user_select_entry_tlist $_user_select_entry_ii
 				list_append _user_select_entry_tlist "Select directory to $_user_select_entry_verb..."
-				_user_select_entry_ii=$(($_user_select_entry_ii + 1))
+				_user_select_entry_ii=$((_user_select_entry_ii + 1))
 			fi
 		fi
 		
@@ -1770,8 +1770,7 @@ steam_get_appinfo() {
 	_steam_appid="$2"
 	
 	_steam_appinfo="$(
-		cat "$_steam_config" \
-		| steam_get_section 'Software' \
+		  steam_get_section 'Software' < "$_steam_config" \
 		| steam_get_section 'Valve' \
 		| steam_get_section 'Steam' \
 		| steam_get_section 'apps' \
@@ -1780,12 +1779,12 @@ steam_get_appinfo() {
 	
 	# Fallback if the tree structure changed
 	[ -z "$_steam_appinfo" ] && _steam_appinfo="$(
-		cat "$_steam_config" | steam_get_section "$_steam_appid"
+		steam_get_section "$_steam_appid" < "$_steam_config"
 	)"
 	
 	# Fallback if the indentation changed
 	[ -z "$_steam_appinfo" ] && _steam_appinfo="$(
-		cat "$_steam_config" | steam_get_section_tail "$_steam_appid"
+		steam_get_section_tail "$_steam_appid" < "$_steam_config"
 	)"
 	
 	print "$_steam_appinfo"
@@ -1829,8 +1828,8 @@ probe_steam_root() {
 		
 		# Strategy 2: Look for known install directory in steam libraries
 		_steam_libraries="$(
-			cat "$_steam_config" \
-			| sed -n '/BaseInstallFolder/s/^[^\"]*\"[^\"]*\"[^\"]*\"\([^\"]*\)\".*/\1/p' \
+			sed -n '/BaseInstallFolder/s/^[^\"]*\"[^\"]*\"[^\"]*\"\([^\"]*\)\".*/\1/p' \
+			< "$_steam_config" \
 			| sed 's:[^a-zA-Z0-9/_.\n]:\\&:g'
 		)"
 		_steam_library_call='probe_steam_library "$_steam_library" && return $true'
@@ -1976,8 +1975,8 @@ probe_cd() {
 probe_cdrom() {
 	
 	_probe_cdrom_mountpoints="$(
-		cat /proc/mounts 2> /dev/null | lines_to_list # Linux - use /proc/mounts
-		mount -p 2> /dev/null | lines_to_list         # Hope that mount has a -p option
+		[ -f /proc/mounts ] && lines_to_list < /proc/mounts # Linux - use /proc/mounts
+		mount -p 2> /dev/null | lines_to_list               # Hope that mount has a -p option
 	)"
 	
 	eval "set -- $_probe_cdrom_mountpoints"
@@ -2073,7 +2072,7 @@ probe_data_dirs() {
 			eval "set -- $(to_list "$data_path")"
 			for _probe_data_dirs_path ; do
 				if [ -f "$_probe_data_dirs_path/data" ] ; then
-					eval "set -- $(cat "$_probe_data_dirs_path/data" | lines_to_list)"
+					eval "set -- $(lines_to_list < "$_probe_data_dirs_path/data")"
 					for _probe_data_dirs_line ; do
 						case "$_probe_data_dirs_line" in
 							/*) ;; *) _probe_data_dirs_line="$(
@@ -2083,13 +2082,13 @@ probe_data_dirs() {
 						probe_data_dir $_probe_data_dirs_existing "$_probe_data_dirs_line" \
 							"portable" && return $true
 					done
-				else if [ -d "$_probe_data_dirs_path/data" ] ; then
+				elif [ -d "$_probe_data_dirs_path/data" ] ; then
 					probe_data_dir $_probe_data_dirs_existing "$_probe_data_dirs_path/data" \
 						"portable" && return $true
 				else
 					probe_data_dir $_probe_data_dirs_existing "$_probe_data_dirs_path" "portable" \
 						&& return $true
-				fi ; fi
+				fi
 			done
 		fi
 		
@@ -2302,10 +2301,10 @@ extract_iso() {
 			eval "for _extract_iso_f in $_extrac_cdrom_f ; do mv -f \"\$_extract_iso_f\" \"\$(print \"\$_extract_iso_f\" | sed 's:;1$::')\" ; done"
 		fi
 		
-	else if have 7z ; then
+	elif have 7z ; then
 		7z x -tiso "$1"
 		ret="$?"
-	fi ; fi
+	fi
 	
 	# For some iso files bsdtar just does nothing - at least let the user know
 	if [ ! -d "$PWD/bin" ] || ! icontains "$PWD/bin" 'arx.ttf' ; then
@@ -2440,7 +2439,7 @@ extract_cab_files() {
 		while true ; do
 			_extract_cab_files_cabdir="$sourcedir/cab.$_extract_cab_files_i"
 			if [ -e "$_extract_cab_files_cabdir" ] ; then
-				_extract_cab_files_i=$(($_extract_cab_files_i + 1))
+				_extract_cab_files_i=$((_extract_cab_files_i + 1))
 				continue
 			fi
 			create_dir "$_extract_cab_files_cabdir" "cab #$i work"
@@ -2453,7 +2452,7 @@ extract_cab_files() {
 			*)     extract "$_extract_cab_files_cabfile" ms_cab installshield ;;
 		esac
 		
-		_extract_cab_files_i=$(($_extract_cab_files_i + 1))
+		_extract_cab_files_i=$((_extract_cab_files_i + 1))
 	done
 	
 }
@@ -2662,7 +2661,7 @@ extract_source() {
 	
 	if [ -d "$sourcefile" ] ; then
 		extract_source_dir "$sourcefile"
-	else if [ -f "$sourcefile" ] ; then
+	elif [ -f "$sourcefile" ] ; then
 		case "$sourcefile" in
 			*.zip) extract_source_zip "$sourcefile" ;;
 			*.exe) extract_source_exe "$sourcefile" ;;
@@ -2677,7 +2676,7 @@ extract_source() {
 		esac
 	else
 		extract_source_cdrom "$sourcefile"
-	fi ; fi
+	fi
 	
 	print
 }
@@ -3036,11 +3035,11 @@ fi
 probe_data_dirs
 if [ $install = 1 ] ; then
 	verb='install to' ; access=--writable
-else if [ $patch = 1 ] ; then
+elif [ $patch = 1 ] ; then
 	verb='patch'      ; access=--existing
 else
 	verb='verify'     ; access=--existing
-fi ; fi
+fi
 user_select_entry $access --dir datadirs datadir \
 	"data directory to $verb" "$cyan" "$dim_cyan" "$verb"
 [ -z "$datadir" ] && die "Missing data dir."
@@ -3114,7 +3113,7 @@ print " - speech.pak"
 f() {
 	
 	# Update progress bar
-	progress=$(($progress + $increment))
+	progress=$((progress + increment))
 	status $progress
 	
 	# Verify & copy file

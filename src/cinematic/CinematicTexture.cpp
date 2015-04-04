@@ -167,22 +167,15 @@ bool CinematicGrid::AllocGrille(Vec2i nb, Vec2f t, Vec2f d, int scale) {
 	nb *= scale;
 	Vec2f oldd = d;
 	d /= (float)scale;
-
-	m_nbuvs = 0;
-	m_nbinds = 0;
-	m_nbuvsmalloc = m_nbvertexs = (nb.x + 1) * (nb.y + 1);
-	m_nbfaces = (nb.x * nb.y) << 1;
-	m_nbindsmalloc = m_nbfaces;
-	m_vertexs = (Vec3f *)malloc(m_nbvertexs * sizeof(Vec3f));
-	m_uvs = (C_UV *)malloc(m_nbvertexs * sizeof(C_UV));
-	m_inds = (C_IND *)malloc(m_nbindsmalloc * sizeof(C_IND));
-
+	
+	m_nbvertexs = (nb.x + 1) * (nb.y + 1);
+	m_vertexs.reserve(m_nbvertexs);
+	
 	//vertexs
 	m_count = nb;
 	t *= .5f;
 	Vec2f dep = -t;
-	 
-	Vec3f * v = m_vertexs;
+	
 	float olddyy = oldd.y;
 
 	while(oldnb.y--) {
@@ -203,9 +196,8 @@ bool CinematicGrid::AllocGrille(Vec2i nb, Vec2f t, Vec2f d, int scale) {
 				if (!oldnbxx) nb.x = 1;
 
 				while(nb.x--) {
-					*v = Vec3f(depxx, dep.y, 0.f);
+					m_vertexs.push_back(Vec3f(depxx, dep.y, 0.f));
 					depxx += dxx;
-					v++;
 				}
 
 				olddxx += oldd.x;
@@ -234,12 +226,9 @@ bool CinematicGrid::AllocGrille(Vec2i nb, Vec2f t, Vec2f d, int scale) {
 
 void CinematicGrid::FreeGrille() {
 	
-	free(m_vertexs);
-	m_vertexs = NULL;
-	free(m_uvs);
-	m_uvs = NULL;
-	free(m_inds);
-	m_inds = NULL;
+	m_vertexs.clear();
+	m_uvs.clear();
+	m_inds.clear();
 	
 	BOOST_FOREACH(C_INDEXED & mat, m_mats) {
 		delete mat.tex;
@@ -253,12 +242,7 @@ void CinematicGrid::AddQuadUVs(Vec2i depc, Vec2i tc, Vec2i bitmappos, Vec2i bitm
 	m_mats[matIdx].bitmapdep = bitmappos;
 	m_mats[matIdx].bitmap = bitmapw;
 	m_mats[matIdx].nbvertexs = (tc.x + 1) * (tc.y + 1);
-
-	if((m_nbuvs + (4 *(tc.x * tc.y))) > m_nbuvsmalloc) {
-		m_nbuvsmalloc += 4 * (tc.x * tc.y);
-		m_uvs = (C_UV *)realloc((void *)m_uvs, m_nbuvsmalloc * sizeof(C_UV));
-	}
-
+	
 	float v = 0.f;
 	float du = 0.999999f / (float)tc.x;
 	float dv = 0.999999f / (float)tc.y;
@@ -277,9 +261,11 @@ void CinematicGrid::AddQuadUVs(Vec2i depc, Vec2i tc, Vec2i bitmappos, Vec2i bitm
 			GetIndNumCube(depcxx, depcyy, &i0, &i1, &i2, &i3);
 
 			//uvs
-			m_uvs[m_nbuvs].indvertex = i0;
-			m_uvs[m_nbuvs].uv.x = u;
-			m_uvs[m_nbuvs++].uv.y = v;
+			C_UV cuv;
+			cuv.indvertex = i0;
+			cuv.uv.x = u;
+			cuv.uv.y = v;
+			m_uvs.push_back(cuv);
 			depcxx++;
 			u += du;
 		}
@@ -310,7 +296,7 @@ void CinematicGrid::AddQuadUVs(Vec2i depc, Vec2i tc, Vec2i bitmappos, Vec2i bitm
 
 void CinematicGrid::ReajustUV() {
 	
-	C_UV* uvs = m_uvs;
+	C_UV* uvs = m_uvs.data();
 
 	for(std::vector<C_INDEXED>::iterator mat = m_mats.begin(); mat != m_mats.end(); ++mat)
 	{
@@ -367,13 +353,11 @@ int CinematicGrid::AddMaterial(Texture2D * tex) {
 
 void CinematicGrid::AddPoly(int matIdx, int i0, int i1, int i2) {
 	
-	if(m_nbinds == m_nbindsmalloc) {
-		m_nbindsmalloc += 100;
-		m_inds = (C_IND *)realloc((void *)m_inds, m_nbindsmalloc * sizeof(C_IND));
-	}
-
-	m_inds[m_nbinds].i1 = checked_range_cast<unsigned short>(i0);
-	m_inds[m_nbinds].i2 = checked_range_cast<unsigned short>(i1);
-	m_inds[m_nbinds++].i3 = checked_range_cast<unsigned short>(i2);
+	C_IND ind;
+	ind.i1 = checked_range_cast<unsigned short>(i0);
+	ind.i2 = checked_range_cast<unsigned short>(i1);
+	ind.i3 = checked_range_cast<unsigned short>(i2);
+	m_inds.push_back(ind);
+	
 	m_mats[matIdx].nbind += 3;
 }

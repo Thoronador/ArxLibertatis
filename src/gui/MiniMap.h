@@ -52,6 +52,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "math/Types.h"
 #include "gui/Interface.h"
 #include "gui/Text.h"
+#include "gui/book/Book.h"
 #include "io/resource/PakReader.h"
 #include "game/EntityManager.h"
 #include "game/Player.h"
@@ -193,8 +194,8 @@ private:
 	
 	Vec2f computePlayerPos(float zoom, int showLevel);
 	void drawBackground(int showLevel, Rect boundaries, float startX, float startY, float zoom, float fadeBorder = 0.f, float decalX = 0.f, float decalY = 0.f, bool invColor = false, float alpha = 1.f);
-	void drawPlayer(float playerSize, float playerX, float playerY, bool alphaBlending = false);
-	void drawDetectedEntities(int showLevel, float startX, float startY, float zoom);
+	void drawPlayer(float playerSize, Vec2f playerPos, bool alphaBlending = false);
+	void drawDetectedEntities(int showLevel, Vec2f start, float zoom);
 	
     std::vector<TexturedVertex> m_mapVertices;
 };

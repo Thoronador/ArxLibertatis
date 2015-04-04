@@ -53,7 +53,28 @@ class RenderWindow;
 extern float FPS;
 
 extern long EERIEMouseButton;
+extern long LastMouseClick;
 extern bool EERIEMouseGrab;
+
+inline bool eeMouseDown1() {
+	return (EERIEMouseButton & 1) && !(LastMouseClick & 1);
+}
+
+inline bool eeMouseUp1() {
+	return !(EERIEMouseButton & 1) && (LastMouseClick & 1);
+}
+
+inline bool eeMousePressed1() {
+	return (EERIEMouseButton & 1);
+}
+
+inline bool eeMouseDown2() {
+	return (EERIEMouseButton & 2) && !(LastMouseClick & 2);
+}
+
+inline bool eeMouseUp2() {
+	return !(EERIEMouseButton & 2) && (LastMouseClick & 2);
+}
 
 class Application {
 	

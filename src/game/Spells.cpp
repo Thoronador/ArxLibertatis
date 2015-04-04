@@ -676,7 +676,7 @@ void ARX_SPELLS_ManageMagic() {
 		}
 		
 		if(snip >= 2) {
-			if(!(EERIEMouseButton & 1) && ARX_FLARES_broken == 0) {
+			if(!eeMousePressed1() && ARX_FLARES_broken == 0) {
 				ARX_FLARES_broken = 2;
 				PIPOrgb++;
 
@@ -684,7 +684,7 @@ void ARX_SPELLS_ManageMagic() {
 					PIPOrgb = 0;
 			}
 			
-			if(EERIEMouseButton & 1) {
+			if(eeMousePressed1()) {
 				Vec2s pos = DANAEMouse;
 				if(TRUE_PLAYER_MOUSELOOK_ON) {
 					pos = MemoMouse;
@@ -1061,7 +1061,7 @@ bool ARX_SPELLS_Launch(SpellType typ, EntityHandle source, SpellcastFlags flags,
 	) {
 		for(size_t i = 0; i < MAX_SPELL_SYMBOLS; i++) {
 			if(SpellSymbol[i] != RUNE_NONE) {
-				if(!( player.rune_flags & (RuneFlag)(1 << SpellSymbol[i]))) {
+				if(!player.hasRune(SpellSymbol[i])) {
 					ARX_SOUND_PlaySpeech("player_cantcast");
 					CurrSpellSymbol = 0;
 					ARX_SPELLS_ResetRecognition();

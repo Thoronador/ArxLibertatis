@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Arx Libertatis Team (see the AUTHORS file)
+ * Copyright 2015 Arx Libertatis Team (see the AUTHORS file)
  *
  * This file is part of Arx Libertatis.
  *
@@ -17,25 +17,34 @@
  * along with Arx Libertatis.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ARX_GUI_NECKLACE_H
-#define ARX_GUI_NECKLACE_H
+#ifndef ARX_GUI_BOOK_BOOK_H
+#define ARX_GUI_BOOK_BOOK_H
 
-#include "game/magic/Rune.h"
-#include "graphics/GraphicsTypes.h"
+#include "gui/Note.h"
 
-namespace gui {
-
-struct ARX_NECKLACE {
-	EERIE_3DOBJ * lacet;
-	EERIE_3DOBJ * runes[RUNE_COUNT];
-	TextureContainer * pTexTab[RUNE_COUNT];
+enum ARX_INTERFACE_BOOK_MODE
+{
+	BOOKMODE_STATS = 0,
+	BOOKMODE_SPELLS,
+	BOOKMODE_MINIMAP,
+	BOOKMODE_QUESTS
 };
 
-extern ARX_NECKLACE necklace;
+extern ARX_INTERFACE_BOOK_MODE Book_Mode;
 
-void NecklaceInit();
-void ReleaseNecklace();
+extern long BOOKZOOM;
 
-}
+void ARX_INTERFACE_BookOpen();
+void ARX_INTERFACE_BookClose();
+void ARX_INTERFACE_BookToggle();
 
-#endif // ARX_GUI_NECKLACE_H
+ARX_INTERFACE_BOOK_MODE nextBookPage();
+ARX_INTERFACE_BOOK_MODE prevBookPage();
+void openBookPage(ARX_INTERFACE_BOOK_MODE newPage, bool toggle = false);
+
+namespace gui {
+bool manageNoteActions(Note & note);
+void updateQuestBook();
+} // namespace gui
+
+#endif // ARX_GUI_BOOK_BOOK_H

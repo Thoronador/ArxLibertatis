@@ -185,9 +185,9 @@ void AddFlare(const Vec2s & pos, float sm, short typ, Entity * io, bool bookDraw
 		float vx = -(fl->pos.x - subj.center.x) * 0.2173913f;
 		float vy = (fl->pos.y - subj.center.y) * 0.1515151515151515f;
 		if(io) {
-			fl->v.p.x = io->pos.x - std::sin(glm::radians(MAKEANGLE(io->angle.getPitch() + vx))) * 100.f;
-			fl->v.p.y = io->pos.y + std::sin(glm::radians(MAKEANGLE(io->angle.getYaw() + vy))) * 100.f - 150.f;
-			fl->v.p.z = io->pos.z + std::cos(glm::radians(MAKEANGLE(io->angle.getPitch() + vx))) * 100.f;
+			fl->v.p = io->pos;
+			fl->v.p += angleToVectorXZ(io->angle.getPitch() + vx) * 100.f;
+			fl->v.p.y += std::sin(glm::radians(MAKEANGLE(io->angle.getYaw() + vy))) * 100.f - 150.f;
 		} else {
 			fl->v.p.x = float(pos.x - (g_size.width() / 2)) * 150.f / float(g_size.width());
 			fl->v.p.y = float(pos.y - (g_size.height() / 2)) * 150.f / float(g_size.width());
@@ -224,7 +224,7 @@ void AddFlare(const Vec2s & pos, float sm, short typ, Entity * io, bool bookDraw
 	}
 
 	if(typ == -1) {
-		float zz = (EERIEMouseButton & 1) ? 0.29f : ((sm > 0.5f) ? rnd() : 1.f);
+		float zz = eeMousePressed1() ? 0.29f : ((sm > 0.5f) ? rnd() : 1.f);
 		if(zz < 0.2f) {
 			fl->type = 2;
 			fl->size = rnd() * 42.f + 42.f;
@@ -296,82 +296,74 @@ static const int FLARELINERND = 6;
 
 void FlareLine(const Vec2s & pos0, const Vec2s & pos1, Entity * io)
 {
-	float m;
-	long i;
-	long z;
-
-	float x0 = pos0.x;
-	float x1 = pos1.x;
-	float y0 = pos0.y;
-	float y1 = pos1.y;
-
-	float dx = (x1 - x0);
-	float adx = glm::abs(dx);
-	float dy = (y1 - y0);
-	float ady = glm::abs(dy);
-
-	if(adx > ady) {
-		if(x0 > x1) {
-			z = x1;
-			x1 = x0;
-			x0 = z;
-			z = y1;
-			y0 = z;
+	Vec2f tmpPos0 = Vec2f(pos0);
+	Vec2f tmpPos1 = Vec2f(pos1);
+	
+	Vec2f d = tmpPos1 - tmpPos0;
+	Vec2f ad = glm::abs(d);
+	
+	if(ad.x > ad.y) {
+		if(tmpPos0.x > tmpPos1.x) {
+			long z = tmpPos1.x;
+			tmpPos1.x = tmpPos0.x;
+			tmpPos0.x = z;
+			z = tmpPos1.y;
+			tmpPos0.y = z;
 		}
 
-		if(x0 < x1) {
-			m = dy / dx;
-			i = x0;
+		if(tmpPos0.x < tmpPos1.x) {
+			float m = d.y / d.x;
+			long i = tmpPos0.x;
 
-			while(i < x1) {
-				z = rnd() * FLARELINERND;
+			while(i < tmpPos1.x) {
+				long z = rnd() * FLARELINERND;
 				z += FLARELINESTEP;
 				i += z;
-				y0 += m * z;
-				AddLFlare(Vec2s(i, y0), io);
+				tmpPos0.y += m * z;
+				AddLFlare(Vec2s(i, tmpPos0.y), io);
 			}
 		} else {
-			m = dy / dx;
-			i = x1;
+			float m = d.y / d.x;
+			long i = tmpPos1.x;
 
-			while(i < x0) {
-				z = rnd() * FLARELINERND;
+			while(i < tmpPos0.x) {
+				long z = rnd() * FLARELINERND;
 				z += FLARELINESTEP;
 				i += z;
-				y0 += m * z;
-				AddLFlare(Vec2s(i, y0), io);
+				tmpPos0.y += m * z;
+				AddLFlare(Vec2s(i, tmpPos0.y), io);
 			}
 		}
 	} else {
-		if(y0 > y1) {
-			z = x1;
-			x0 = z;
-			z = y1;
-			y1 = y0;
-			y0 = z;
+		if(tmpPos0.y > tmpPos1.y) {
+			long z = tmpPos1.x;
+			tmpPos0.x = z;
+			z = tmpPos1.y;
+			tmpPos1.y = tmpPos0.y;
+			tmpPos0.y = z;
 		}
 
-		if(y0 < y1) {
-			m = dx / dy;
-			i = y0;
+		if(tmpPos0.y < tmpPos1.y) {
+			float m = d.x / d.y;
+			long i = tmpPos0.y;
 
-			while(i < y1) {
-				z = rnd() * FLARELINERND;
+			while(i < tmpPos1.y) {
+				long z = rnd() * FLARELINERND;
 				z += FLARELINESTEP;
 				i += z;
-				x0 += m * z;
-				AddLFlare(Vec2s(x0, i), io);
+				tmpPos0.x += m * z;
+				AddLFlare(Vec2s(tmpPos0.x, i), io);
 			}
 		} else {
-			m = dx / dy;
-			i = y1;
+			float m = d.x / d.y;
+			long i = tmpPos1.y;
 
-			while(i < y0) {
-				z = rnd() * FLARELINERND;
+			while(i < tmpPos0.y) {
+				long z = rnd() * FLARELINERND;
 				z += FLARELINESTEP;
 				i += z;
-				x0 += m * z;
-				AddLFlare(Vec2s(x0, i), io);
+				tmpPos0.x += m * z;
+				AddLFlare(Vec2s(tmpPos0.x, i), io);
 			}
 		}
 	}

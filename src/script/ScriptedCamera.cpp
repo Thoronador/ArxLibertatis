@@ -58,30 +58,9 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "script/ScriptUtils.h"
 
 
-extern Entity * CAMERACONTROLLER;
-
 namespace script {
 
 namespace {
-
-class CameraControlCommand : public Command {
-	
-public:
-	
-	CameraControlCommand() : Command("cameracontrol", IO_CAMERA) { }
-	
-	Result execute(Context & context) {
-		
-		bool enable = context.getBool();
-		
-		DebugScript(' ' << enable);
-		
-		CAMERACONTROLLER = enable ? context.getEntity() : NULL;
-		
-		return Success;
-	}
-	
-};
 
 class CameraActivateCommand : public Command {
 	
@@ -250,7 +229,7 @@ public:
 		
 		DebugScript(' ' << intensity << ' ' << duration << ' ' << period);
 		
-		AddQuakeFX(intensity, duration, period, 1);
+		AddQuakeFX(intensity, duration, period, true);
 		
 		return Success;
 	}
@@ -261,7 +240,6 @@ public:
 
 void setupScriptedCamera() {
 	
-	ScriptEvent::registerCommand(new CameraControlCommand);
 	ScriptEvent::registerCommand(new CameraActivateCommand);
 	ScriptEvent::registerCommand(new CameraSmoothingCommand);
 	ScriptEvent::registerCommand(new CinemascopeCommand);

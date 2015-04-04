@@ -125,13 +125,11 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 #include "script/Script.h"
 
-extern bool		ARX_CONVERSATION;
 extern long		HERO_SHOW_1ST;
 extern long		REQUEST_SPEECH_SKIP;
 extern long		DONT_ERASE_PLAYER;
 extern bool		GLOBAL_MAGIC_MODE;
 
-extern Entity * CAMERACONTROLLER;
 extern ParticleManager * pParticleManager;
 
 extern unsigned long LAST_JUMP_ENDTIME;
@@ -142,12 +140,8 @@ static const float STEP_DISTANCE = 120.f;
 static const float TARGET_DT = 1000.f / 30.f;
 
 extern Vec3f PUSH_PLAYER_FORCE;
-extern bool bGoldHalo;
-extern float InventoryX;
-extern float InventoryDir;
 extern long COLLIDED_CLIMB_POLY;
 extern long HERO_SHOW_1ST;
-extern unsigned long ulGoldHaloTime;
 
 static const float ARX_PLAYER_SKILL_STEALTH_MAX = 100.f;
 
@@ -244,9 +238,9 @@ void ARX_KEYRING_Combine(Entity * io) {
  */
 void ARX_PLAYER_FrontPos(Vec3f * pos)
 {
-	pos->x = player.pos.x - std::sin(glm::radians(MAKEANGLE(player.angle.getPitch()))) * 100.f;
-	pos->y = player.pos.y + 100.f; //-100.f;
-	pos->z = player.pos.z + std::cos(glm::radians(MAKEANGLE(player.angle.getPitch()))) * 100.f;
+	*pos = player.pos;
+	*pos += angleToVectorXZ(player.angle.getPitch()) * 100.f;
+	*pos += Vec3f(0.f, 100.f, 0.f); // XXX use -100 here ?
 }
 
 /*!
@@ -352,7 +346,7 @@ void ARX_Player_Rune_Add(RuneFlag _ulRune)
 			bool bOk = true;
 
 			while(j < 4 && spellicons[i].symbols[j] != 255) {
-				if(!(player.rune_flags & (RuneFlag)(1 << spellicons[i].symbols[j]))) {
+				if(!player.hasRune(spellicons[i].symbols[j])) {
 					bOk = false;
 				}
 				j++;
@@ -372,7 +366,7 @@ void ARX_Player_Rune_Add(RuneFlag _ulRune)
 			bool bOk = true;
 
 			while(j < 4 && (spellicons[i].symbols[j] != 255)) {
-				if(!(player.rune_flags & (RuneFlag)(1 << spellicons[i].symbols[j]))) {
+				if(!player.hasRune(spellicons[i].symbols[j])) {
 					bOk = false;
 				}
 				j++;
@@ -386,8 +380,7 @@ void ARX_Player_Rune_Add(RuneFlag _ulRune)
 	
 	if(iNbSpellsAfter > iNbSpells) {
 		bookIconGuiRequestFX();
-		bBookHalo = true;
-		ulBookHaloTime = 0;
+		bookIconGuiRequestHalo();
 	}
 }
 
@@ -409,8 +402,9 @@ void ARX_PLAYER_Quest_Add(const std::string & quest, bool _bLoad) {
 	
 	PlayerQuest.push_back(STRUCT_QUEST());
 	PlayerQuest.back().ident = quest;
-	bBookHalo = !_bLoad;
-	ulBookHaloTime = 0;
+	
+	if(!_bLoad)
+		bookIconGuiRequestHalo();
 	
 	gui::updateQuestBook();
 }
@@ -1972,7 +1966,8 @@ static bool Valid_Jump_Pos() {
 	long hum = 0;
 	for(float vv = 0; vv < 360.f; vv += 20.f) {
 		tmpp.origin = player.basePosition();
-		tmpp.origin += Vec3f(-std::sin(glm::radians(vv)) * 20.f, 0.f, std::cos(glm::radians(vv)) * 20.f);
+		tmpp.origin += angleToVectorXZ(vv) * 20.f;
+		
 		tmpp.radius = player.physics.cyl.radius;
 		float anything = CheckAnythingInCylinder(tmpp, entities.player(), CFLAG_JUST_TEST);
 		if(anything > 10) {
@@ -2036,37 +2031,6 @@ void ARX_PLAYER_Manage_Movement() {
 	}
 	
 	StoredTime = DeltaTime;
-}
-
-static void GuiInventoryFaderUpdate() {
-	
-	if(InventoryDir != 0) {
-		if((player.Interface & INTER_COMBATMODE) || player.doingmagic >= 2 || InventoryDir == -1) {
-			if(InventoryX > -160)
-				InventoryX -= INTERFACE_RATIO(framedelay * ( 1.0f / 3 ));
-		} else {
-			if(InventoryX < 0)
-				InventoryX += InventoryDir * INTERFACE_RATIO(framedelay * ( 1.0f / 3 ));
-		}
-
-		if(InventoryX <= -160) {
-			InventoryX = -160;
-			InventoryDir = 0;
-
-			if(player.Interface & INTER_STEAL || ioSteal) {
-				SendIOScriptEvent(ioSteal, SM_STEAL, "off");
-				player.Interface &= ~INTER_STEAL;
-				ioSteal = NULL;
-			}
-
-			SecondaryInventory = NULL;
-			TSecondaryInventory = NULL;
-			InventoryDir = 0;
-		} else if(InventoryX >= 0) {
-			InventoryX = 0;
-			InventoryDir = 0;
-		}
-	}	
 }
 
 void PlayerMovementIterate(float DeltaTime) {
@@ -2542,7 +2506,7 @@ lasuite:
 		CURRENT_PLAYER_COLOR = std::max(CURRENT_PLAYER_COLOR, grnd_color);
 	}
 	
-	GuiInventoryFaderUpdate();
+	gui::InventoryFaderUpdate();
 }
 
 /*!
@@ -2609,8 +2573,7 @@ void ARX_PLAYER_PutPlayerInNormalStance() {
  */
 void ARX_PLAYER_AddGold(long _lValue) {
 	player.gold += _lValue;
-	bGoldHalo = true;
-	ulGoldHaloTime = 0;
+	purseIconGuiRequestHalo();
 }
 
 void ARX_PLAYER_AddGold(Entity * gold) {
@@ -2696,11 +2659,14 @@ void ARX_PLAYER_Invulnerability(long flag) {
 }
 
 extern Entity * FlyingOverIO;
+extern Vec3f LastValidPlayerPos;
 
 void ARX_GAME_Reset(long type) {
 	arx_assert(entities.player());
 	
 	DeadTime = 0;
+	
+	LastValidPlayerPos = Vec3f_ZERO;
 	
 	entities.player()->speed_modif = 0;
 	
@@ -2768,11 +2734,7 @@ void ARX_GAME_Reset(long type) {
 	ARX_SCRIPT_Timer_ClearAll();
 	ARX_SCRIPT_EventStackClear();
 	ARX_SCRIPT_ResetAll(false);
-
-	// Conversations
-	ARX_CONVERSATION_Reset();
-	ARX_CONVERSATION = false;
-
+	
 	// Speech Things
 	REQUEST_SPEECH_SKIP = 0;
 	ARX_SPEECH_ClearAll();
@@ -2883,8 +2845,6 @@ void ARX_GAME_Reset(long type) {
 	TSecondaryInventory = NULL;
 	MasterCamera.exist = 0;
 	CHANGE_LEVEL_ICON = -1;
-	
-	CAMERACONTROLLER = NULL;
 	
 	// Kill Script Loaded IO
 	CleanScriptLoadedIO();

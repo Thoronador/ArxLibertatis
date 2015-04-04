@@ -47,15 +47,13 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "game/Inventory.h"
 #include "game/Entity.h"
 #include "game/Player.h"
+#include "gui/Hud.h"
 #include "gui/Interface.h"
 #include "gui/Menu.h"
 #include "gui/MiniMap.h"
 #include "scene/GameSound.h"
 #include "script/ScriptEvent.h"
 #include "script/ScriptUtils.h"
-
-
-extern float InventoryDir;
 
 namespace script {
 
@@ -84,9 +82,9 @@ public:
 		std::string command = context.getWord();
 		
 		if(command == "open") {
-			ARX_INTERFACE_BookOpenClose(1);
+			ARX_INTERFACE_BookOpen();
 		} else if(command == "close") {
-			ARX_INTERFACE_BookOpenClose(2);
+			ARX_INTERFACE_BookClose();
 		} else if(command == "change") {
 			// Nothing to do, mode already changed by flags.
 		} else {
@@ -114,13 +112,7 @@ public:
 			return Success;
 		}
 		
-		Entity * pio = (SecondaryInventory) ? SecondaryInventory->io : ioSteal;
-		if(pio && pio == ioSteal) {
-			InventoryDir = -1;
-			SendIOScriptEvent(pio, SM_INVENTORY2_CLOSE);
-			TSecondaryInventory = SecondaryInventory;
-			SecondaryInventory = NULL;
-		}
+		gui::CloseSecondaryInventory();
 		
 		return Success;
 	}

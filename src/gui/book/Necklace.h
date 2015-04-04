@@ -17,41 +17,27 @@
  * along with Arx Libertatis.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ARX_GUI_HUD_H
-#define ARX_GUI_HUD_H
+#ifndef ARX_GUI_NECKLACE_H
+#define ARX_GUI_NECKLACE_H
 
-#include "math/Types.h"
-
-extern bool bIsAiming;
+#include "game/magic/Rune.h"
+#include "graphics/GraphicsTypes.h"
 
 namespace gui {
 
-void InventoryFaderUpdate();
+struct ARX_NECKLACE {
+	EERIE_3DOBJ * lacet;
+	EERIE_3DOBJ * runes[RUNE_COUNT];
+	TextureContainer * pTexTab[RUNE_COUNT];
+};
 
-void CloseSecondaryInventory();
+extern ARX_NECKLACE necklace;
+
+void NecklaceInit();
+void ReleaseNecklace();
+
+void ARX_INTERFACE_ManageOpenedBook_Finish();
 
 }
 
-void hudElementsInit();
-
-void setHudScale(float scale);
-
-void purseIconGuiRequestHalo();
-
-void mecanismIconReset();
-//! Show the quick save indicator for a short time
-void showQuickSaveIcon();
-void hitStrengthGaugeRequestFlash(float flashIntensity);
-void bookIconGuiRequestFX();
-void bookIconGuiRequestHalo();
-//! Hide the quick save indicator
-void hideQuickSaveIcon();
-
-void manageEditorControlsHUD();
-void manageEditorControlsHUD2();
-
-bool inventoryGuiupdateInputPROXY();
-
-Vec2f getInventoryGuiAnchorPosition();
-
-#endif // ARX_GUI_HUD_H
+#endif // ARX_GUI_NECKLACE_H

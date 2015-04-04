@@ -45,6 +45,7 @@
 #include "gui/Cursor.h"
 #include "gui/Interface.h"
 #include "gui/Speech.h"
+#include "gui/book/Book.h"
 
 #include "input/Input.h"
 
@@ -60,14 +61,6 @@ TextureContainer * BasicInventorySkin=NULL;
 float InventoryX = -60.f;
 static float fDecPulse;
 bool bInventorySwitch = false;
-bool bGoldHalo = false;
-unsigned long ulGoldHaloTime = 0;
-
-static void ARX_INTERFACE_DrawItem(TextureContainer * tc, float x, float y, float z = 0.001f, Color col = Color::white) {
-	if(tc) {
-		EERIEDrawBitmap(Rectf(Vec2f(x, y), tc->m_dwWidth, tc->m_dwHeight), z, tc, col);
-	}
-}
 
 enum Anchor {
 	Anchor_TopLeft,
@@ -107,6 +100,59 @@ static Rectf createChild(const Rectf & parent, const Anchor parentAnchor,
 	child.move(-childPos.x, -childPos.y);
 	return child;
 }
+
+namespace gui {
+
+void InventoryFaderUpdate() {
+	
+	if(InventoryDir != 0) {
+		if((player.Interface & INTER_COMBATMODE) || player.doingmagic >= 2 || InventoryDir == -1) {
+			if(InventoryX > -160)
+				InventoryX -= INTERFACE_RATIO(framedelay * ( 1.0f / 3 ));
+		} else {
+			if(InventoryX < 0)
+				InventoryX += InventoryDir * INTERFACE_RATIO(framedelay * ( 1.0f / 3 ));
+		}
+
+		if(InventoryX <= -160) {
+			InventoryX = -160;
+			InventoryDir = 0;
+
+			if(player.Interface & INTER_STEAL || ioSteal) {
+				SendIOScriptEvent(ioSteal, SM_STEAL, "off");
+				player.Interface &= ~INTER_STEAL;
+				ioSteal = NULL;
+			}
+
+			SecondaryInventory = NULL;
+			TSecondaryInventory = NULL;
+			InventoryDir = 0;
+		} else if(InventoryX >= 0) {
+			InventoryX = 0;
+			InventoryDir = 0;
+		}
+	}
+}
+
+void CloseSecondaryInventory() {
+	
+	Entity * io = NULL;
+	
+	if(SecondaryInventory)
+		io = SecondaryInventory->io;
+	else if(player.Interface & INTER_STEAL)
+		io = ioSteal;
+	
+	if(io) {
+		InventoryDir = -1;
+		SendIOScriptEvent(io, SM_INVENTORY2_CLOSE);
+		TSecondaryInventory = SecondaryInventory;
+		SecondaryInventory = NULL;
+	}
+}
+
+}
+
 
 
 class HudItem {
@@ -302,7 +348,8 @@ public:
 				ingame_inventory = tc;
 		}
 		
-		ARX_INTERFACE_DrawItem(ingame_inventory, INTERFACE_RATIO(InventoryX), 0.f);
+		Rectf rect = Rectf(Vec2f(INTERFACE_RATIO(InventoryX), 0.f), ingame_inventory->m_dwWidth, ingame_inventory->m_dwHeight);
+		EERIEDrawBitmap(rect, 0.001f, ingame_inventory, Color::white);
 		
 		for(long y = 0; y < inventory->m_size.y; y++) {
 		for(long x = 0; x < inventory->m_size.x; x++) {
@@ -518,7 +565,8 @@ public:
 		
 		const Vec2f pos = anchorPos + Vec2f(_iX, _iY);
 		
-		ARX_INTERFACE_DrawItem(m_heroInventory, pos.x, pos.y - INTERFACE_RATIO(5));
+		Rectf rect = Rectf(pos + Vec2f(0.f, -INTERFACE_RATIO(5)), m_heroInventory->m_dwWidth, m_heroInventory->m_dwHeight);
+		EERIEDrawBitmap(rect, 0.001f, m_heroInventory, Color::white);
 		
 		for(size_t y = 0; y < INVENTORY_Y; y++) {
 		for(size_t x = 0; x < INVENTORY_X; x++) {
@@ -592,8 +640,8 @@ public:
 						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 						SpecialCursor=CURSOR_INTERACTION_ON;
 						
-						if (((EERIEMouseButton & 1)  && !(LastMouseClick & 1))
-							|| ((!(EERIEMouseButton & 1)) && (LastMouseClick & 1) && DRAGINTER))
+						if ((eeMouseDown1())
+							|| (eeMouseUp1() && DRAGINTER))
 						{
 							if(sActiveInventory > 0) {
 								ARX_SOUND_PlayInterface(SND_BACKPACK, 0.9F + 0.2F * rnd());
@@ -619,8 +667,8 @@ public:
 						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 						SpecialCursor=CURSOR_INTERACTION_ON;
 						
-						if (((EERIEMouseButton & 1)  && !(LastMouseClick & 1))
-							|| ((!(EERIEMouseButton & 1)) && (LastMouseClick & 1) && DRAGINTER))
+						if ((eeMouseDown1())
+							|| (eeMouseUp1() && DRAGINTER))
 						{
 							if(sActiveInventory < player.bag-1) {
 								ARX_SOUND_PlayInterface(SND_BACKPACK, 0.9F + 0.2F * rnd());
@@ -711,25 +759,30 @@ static void DrawItemPrice() {
 
 class HudIconBase : public HudItem {
 protected:
-	void DrawHalo(float r, float g, float b, TextureContainer* halo, const Vec2f& coords) {
-		if(halo) {
-			ARX_INTERFACE_HALO_Render(Color3f(r, g, b), HALO_ACTIVE, halo, coords);
-		}
-	}
+	TextureContainer * m_tex;
+	bool m_isSelected;
 	
+	bool m_haloActive;
+	Color3f m_haloColor;
+	
+public:
 	//Used for drawing icons like the book or backpack icon.
-	void DrawIcon(const Rectf & rect, TextureContainer * tex, E_ARX_STATE_MOUSE hoverMouseState) {
-		arx_assert(tex);
+	void draw() {
+		arx_assert(m_tex);
 		
-		EERIEDrawBitmap(rect, 0.001f, tex, Color::white);
+		EERIEDrawBitmap(m_rect, 0.001f, m_tex, Color::white);
 		
-		if (eMouseState == hoverMouseState) {
+		if(m_isSelected) {
 			GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
 			GRenderer->SetRenderState(Renderer::AlphaBlending, true);
 			
-			EERIEDrawBitmap(rect, 0.001f, tex, Color::white);
+			EERIEDrawBitmap(m_rect, 0.001f, m_tex, Color::white);
 			
 			GRenderer->SetRenderState(Renderer::AlphaBlending, false);
+		}
+		
+		if(m_haloActive && m_tex->getHalo()) {
+			ARX_INTERFACE_HALO_Render(m_haloColor, HALO_ACTIVE, m_tex->getHalo(), m_rect.topLeft());
 		}
 	}
 };
@@ -738,7 +791,6 @@ extern TextureContainer * healing;
 
 class BookIconGui : public HudIconBase {
 private:
-	TextureContainer * m_tex;
 	
 	void MakeBookFX(const Vec3f & pos) {
 		
@@ -781,12 +833,24 @@ private:
 	
 	Vec2f m_size;
 	
+	unsigned long ulBookHaloTime;
+	
 public:
 	void init() {
 		m_tex = TextureContainer::LoadUI("graph/interface/icons/book");
 		arx_assert(m_tex);
 		
 		m_size = Vec2f(32, 32);
+		
+		m_haloColor = Color3f(0.2f, 0.4f, 0.8f);
+		
+		m_haloActive = false;
+		ulBookHaloTime = 0;
+	}
+	
+	void requestHalo() {
+		m_haloActive = true;
+		ulBookHaloTime = 0;
 	}
 	
 	void requestFX() {
@@ -796,48 +860,45 @@ public:
 	void update(const Rectf & parent) {
 		
 		m_rect = createChild(parent, Anchor_TopRight, m_size * m_scale, Anchor_BottomRight);
-		m_rect.move(-3, -3);
-	}
-	
-	void updateInput() {
-		if(m_rect.contains(Vec2f(DANAEMouse))) {
-			eMouseState = MOUSE_IN_BOOK_ICON;
-			SpecialCursor = CURSOR_INTERACTION_ON;
-
-			if((EERIEMouseButton & 1) && !(LastMouseClick & 1)) {
-				ARX_INTERFACE_BookOpenClose(0);
-				EERIEMouseButton &=~1;
-			}
-			return;
-		}
-	}
-	
-	void draw() {
-		DrawIcon(m_rect, m_tex, MOUSE_IN_BOOK_ICON);
-	}
-	
-	void drawHalo() {
-		if(bBookHalo) {
+		
+		if(m_haloActive) {
 			float fCalc = ulBookHaloTime + Original_framedelay;
 			ulBookHaloTime = checked_range_cast<unsigned long>(fCalc);
 			if(ulBookHaloTime >= 3000) { // ms
-				bBookHalo = false;
+				m_haloActive = false;
 			}
-			Vec2f pos = m_rect.topLeft();
-			DrawHalo(0.2f, 0.4f, 0.8f, m_tex->getHalo(), pos);
+		}
+	}
+	
+	void updateInput() {
+		m_isSelected = m_rect.contains(Vec2f(DANAEMouse));
+		
+		if(m_isSelected) {
+			SpecialCursor = CURSOR_INTERACTION_ON;
+
+			if(eeMouseDown1()) {
+				ARX_INTERFACE_BookToggle();
+				EERIEMouseButton &=~1;
+			}
+			return;
 		}
 	}
 };
 
 static BookIconGui bookIconGui;
 
+void bookIconGuiRequestHalo() {
+	bookIconGui.requestHalo();
+}
+
 void bookIconGuiRequestFX() {
 	bookIconGui.requestFX();
 }
 
+
+
 class BackpackIconGui : public HudIconBase {
 private:
-	TextureContainer * m_tex;
 	
 public:
 	void init() {
@@ -848,7 +909,6 @@ public:
 	void update(const Rectf & parent) {
 		
 		m_rect = createChild(parent, Anchor_TopRight, Vec2f(32, 32) * m_scale, Anchor_BottomRight);
-		m_rect.move(-3, -3);
 	}
 	
 	void updateInput() {
@@ -866,7 +926,7 @@ public:
 
 				flDelay=0;
 				EERIEMouseButton&=~4;
-			} else if(((EERIEMouseButton & 1) && !(LastMouseClick & 1)) || flDelay) {
+			} else if((eeMouseDown1()) || flDelay) {
 				if(!flDelay) {
 					flDelay=arxtime.get_updated();
 					return;
@@ -887,8 +947,8 @@ public:
 				}
 
 				EERIEMouseButton &=~1;
-			} else if((EERIEMouseButton & 2) && !(LastMouseClick & 2)) {
-				ARX_INTERFACE_BookOpenClose(2);
+			} else if(eeMouseDown2()) {
+				ARX_INTERFACE_BookClose();
 				ARX_INVENTORY_OpenClose(NULL);
 
 				if(player.Interface & INTER_INVENTORYALL) {
@@ -924,7 +984,8 @@ public:
 	}
 	
 	void draw() {
-		DrawIcon(m_rect, m_tex, MOUSE_IN_INVENTORY_ICON);
+		m_isSelected = eMouseState == MOUSE_IN_INVENTORY_ICON;
+		HudIconBase::draw();
 	}
 };
 
@@ -933,37 +994,32 @@ static BackpackIconGui backpackIconGui;
 
 class StealIconGui : public HudIconBase {
 private:
-	TextureContainer * m_tex;
+	Vec2f m_size;
 	Vec2f m_pos;
+	
 public:
 	void init() {
 		m_tex = TextureContainer::LoadUI("graph/interface/icons/steal");
 		arx_assert(m_tex);
+		
+		m_size = Vec2f(32, 32);
 	}
 	
 	void update() {
-		m_pos.x = static_cast<float>(-lSLID_VALUE);
-		m_pos.y = g_size.height() - INTERFACE_RATIO(78.f + 32);
+		Vec2f pos(static_cast<float>(-lSLID_VALUE), g_size.height() - (78 + 32));
+		
+		m_rect = Rectf(pos, m_size.x, m_size.y);
 	}
 	
 	void updateInput() {
 		
 		// steal
 		if(player.Interface & INTER_STEAL) {
-			Vec2f pos(static_cast<float>(-lSLID_VALUE), g_size.height() - (78 + 32));
-			
-			const Rect mouseTestRect(
-			pos.x,
-			pos.y,
-			pos.x + INTERFACE_RATIO(32),
-			pos.y + INTERFACE_RATIO(32)
-			);
-			
-			if(mouseTestRect.contains(Vec2i(DANAEMouse))) {
+			if(m_rect.contains(Vec2f(DANAEMouse))) {
 				eMouseState=MOUSE_IN_STEAL_ICON;
 				SpecialCursor=CURSOR_INTERACTION_ON;
 
-				if((EERIEMouseButton & 1) && !(LastMouseClick & 1)) {
+				if(eeMouseDown1()) {
 					ARX_INVENTORY_OpenClose(ioSteal);
 
 					if(player.Interface&(INTER_INVENTORY | INTER_INVENTORYALL)) {
@@ -987,9 +1043,8 @@ public:
 	}
 	
 	void draw() {
-		Rectf rect = Rectf(m_pos, m_tex->m_dwWidth, m_tex->m_dwHeight);
-		
-		DrawIcon(rect, m_tex, MOUSE_IN_STEAL_ICON);
+		m_isSelected = eMouseState == MOUSE_IN_STEAL_ICON;
+		HudIconBase::draw();
 	}
 };
 
@@ -997,34 +1052,32 @@ static StealIconGui stealIconGui;
 
 class PickAllIconGui : public HudIconBase {
 private:
-	TextureContainer * m_tex;
-	Vec2f m_pos;
+	Vec2f m_size;
+	
 public:
 	void init() {
 		m_tex = TextureContainer::LoadUI("graph/interface/inventory/inv_pick");
+		arx_assert(m_tex);
+		
+		m_size = Vec2f(16, 16);
 	}
 	
 	void update() {
-		m_pos.x = INTERFACE_RATIO(InventoryX);
-		m_pos.y = INTERFACE_RATIO_DWORD(BasicInventorySkin->m_dwHeight);
-		m_pos += Vec2f(16, -16);
+		Rectf parent = Rectf(Vec2f(InventoryX, 0), BasicInventorySkin->m_dwWidth, BasicInventorySkin->m_dwHeight);
+		
+		Rectf spacer = createChild(parent, Anchor_BottomLeft, Vec2f(16, 16), Anchor_BottomLeft);
+		
+		m_rect = createChild(spacer, Anchor_BottomRight, m_size, Anchor_BottomLeft);
 	}
 	
 	void updateInput() {
-		Vec2f pos(InventoryX + 16, BasicInventorySkin->m_dwHeight - 16);
 		
-		const Rect mouseTestRect(
-		pos.x,
-		pos.y,
-		pos.x + INTERFACE_RATIO(16),
-		pos.y + INTERFACE_RATIO(16)
-		);
+		m_isSelected = m_rect.contains(Vec2f(DANAEMouse));
 		
-		if(mouseTestRect.contains(Vec2i(DANAEMouse))) {
-			eMouseState = MOUSE_IN_INVENTORY_PICKALL_ICON;
+		if(m_isSelected) {
 			SpecialCursor=CURSOR_INTERACTION_ON;
 
-			if((EERIEMouseButton & 1) && !(LastMouseClick & 1)) {
+			if(eeMouseDown1()) {
 				if(TSecondaryInventory) {
 					// play un son que si un item est pris
 					ARX_INVENTORY_TakeAllFromSecondaryInventory();
@@ -1037,52 +1090,43 @@ public:
 				return;
 		}
 	}
-	
-	void draw() {
-		Rectf rect = Rectf(m_pos, m_tex->m_dwWidth, m_tex->m_dwHeight);
-		
-		DrawIcon(rect, m_tex, MOUSE_IN_INVENTORY_PICKALL_ICON);
-	}
 };
 
 static PickAllIconGui pickAllIconGui;
 
 class CloseSecondaryInventoryIconGui : public HudIconBase {
 private:
-	TextureContainer * m_tex;
-	Vec2f m_pos;
+	Vec2f m_size;
+	
 public:
 	void init() {
 		m_tex = TextureContainer::LoadUI("graph/interface/inventory/inv_close");
 		arx_assert(m_tex);
+		
+		m_size = Vec2f(16, 16);
 	}
 	
 	void update() {
-		m_pos.x = INTERFACE_RATIO(InventoryX) + INTERFACE_RATIO_DWORD(BasicInventorySkin->m_dwWidth);
-		m_pos.y = INTERFACE_RATIO_DWORD(BasicInventorySkin->m_dwHeight);
-		m_pos += Vec2f(-32, -16);
+		Rectf parent = Rectf(Vec2f(InventoryX, 0), BasicInventorySkin->m_dwWidth, BasicInventorySkin->m_dwHeight);
+		
+		Rectf spacer = createChild(parent, Anchor_BottomRight, Vec2f(16, 16), Anchor_BottomRight);
+		
+		m_rect = createChild(spacer, Anchor_BottomLeft, m_size, Anchor_BottomRight);
 	}
 	
 	void updateInput() {
-		Vec2f pos(InventoryX + BasicInventorySkin->m_dwWidth - 32, BasicInventorySkin->m_dwHeight - 16);
-
-		const Rect mouseTestRect(
-		pos.x,
-		pos.y,
-		pos.x + INTERFACE_RATIO(16),
-		pos.y + INTERFACE_RATIO(16)
-		);
 		
-		if(mouseTestRect.contains(Vec2i(DANAEMouse))) {
-			eMouseState = MOUSE_IN_INVENTORY_CLOSE_ICON;
+		m_isSelected = m_rect.contains(Vec2f(DANAEMouse));
+		
+		if(m_isSelected) {
 			SpecialCursor=CURSOR_INTERACTION_ON;
 
-			if((EERIEMouseButton & 1) && !(LastMouseClick & 1)) {
+			if(eeMouseDown1()) {
 				Entity * io = NULL;
 
 				if(SecondaryInventory)
 					io = SecondaryInventory->io;
-				else if (player.Interface & INTER_STEAL)
+				else if(player.Interface & INTER_STEAL)
 					io = ioSteal;
 
 				if(io) {
@@ -1100,22 +1144,16 @@ public:
 				return;
 		}
 	}
-	
-	void draw() {
-		Rectf rect = Rectf(m_pos, m_tex->m_dwWidth, m_tex->m_dwHeight);
-		
-		DrawIcon(rect, m_tex, MOUSE_IN_INVENTORY_CLOSE_ICON);
-	}
-	
 };
 
 static CloseSecondaryInventoryIconGui closeSecondaryInventoryIconGui;
 
 class LevelUpIconGui : public HudIconBase {
 private:
-	TextureContainer * m_tex;
 	Vec2f m_pos;
 	Vec2f m_size;
+	bool m_visible;
+	
 public:
 	void init() {
 		m_tex = TextureContainer::LoadUI("graph/interface/icons/lvl_up");
@@ -1125,25 +1163,32 @@ public:
 	
 	void update(const Rectf & parent) {
 		m_rect = createChild(parent, Anchor_TopRight, m_size * m_scale, Anchor_BottomRight);
+		
+		m_visible = (player.Skill_Redistribute) || (player.Attribute_Redistribute);
 	}
 	
 	void updateInput() {
-		if((player.Skill_Redistribute) || (player.Attribute_Redistribute)) {
-			if(m_rect.contains(Vec2f(DANAEMouse))) {
-				eMouseState = MOUSE_IN_REDIST_ICON;
-				SpecialCursor = CURSOR_INTERACTION_ON;
-
-				if((EERIEMouseButton & 1) && !(LastMouseClick & 1)) {
-					ARX_INTERFACE_BookOpenClose(1);
-					EERIEMouseButton &=~1;
-				}
+		if(!m_visible)
+			return;
+		
+		m_isSelected = m_rect.contains(Vec2f(DANAEMouse));
+		
+		if(m_isSelected) {
+			SpecialCursor = CURSOR_INTERACTION_ON;
+			
+			if(eeMouseDown1()) {
+				ARX_INTERFACE_BookOpen();
+				EERIEMouseButton &=~1;
 			}
 		}
 	}
 	
 
 	void draw() {
-		DrawIcon(m_rect, m_tex, MOUSE_IN_REDIST_ICON);
+		if(!m_visible)
+			return;
+		
+		HudIconBase::draw();
 	}
 };
 
@@ -1152,26 +1197,48 @@ LevelUpIconGui levelUpIconGui;
 
 class PurseIconGui : public HudIconBase {
 private:
-	TextureContainer * m_tex;
 	Vec2f m_pos;
 	Vec2f m_size;
+	
+	long ulGoldHaloTime;
+	
 public:
 	void init() {
 		m_tex = TextureContainer::LoadUI("graph/interface/inventory/gold");
 		arx_assert(m_tex);
 		m_size = Vec2f(32.f, 32.f);
+		
+		m_haloColor = Color3f(0.9f, 0.9f, 0.1f);
+		
+		m_haloActive = false;
+		ulGoldHaloTime = 0;
+	}
+	
+	void requestHalo() {
+		m_haloActive = true;
+		ulGoldHaloTime = 0;
 	}
 	
 	void update(const Rectf & parent) {
 		m_rect = createChild(parent, Anchor_TopRight, m_size * m_scale, Anchor_BottomRight);
-		m_rect.move(-1.f, -3.f);
+		
+		//A halo is drawn on the character's stats icon (book) when leveling up, for example.
+		if(m_haloActive) {
+			float fCalc = ulGoldHaloTime + Original_framedelay;
+			ulGoldHaloTime = checked_range_cast<unsigned long>(fCalc);
+			if(ulGoldHaloTime >= 1000) { // ms
+				m_haloActive = false;
+			}
+		}
 	}
 	
 	void updateInput() {
+		m_isSelected = false;
 		// gold
 		if(player.gold > 0) {
-			if(m_rect.contains(Vec2f(DANAEMouse))) {
-				eMouseState = MOUSE_IN_GOLD_ICON;
+			m_isSelected = m_rect.contains(Vec2f(DANAEMouse));
+			
+			if(m_isSelected) {
 				SpecialCursor = CURSOR_INTERACTION_ON;
 
 				if(   player.gold > 0
@@ -1190,32 +1257,23 @@ public:
 	}
 	
 	void draw() {
-		DrawIcon(m_rect, m_tex, MOUSE_IN_GOLD_ICON);
+		HudIconBase::draw();
 		
-		if(eMouseState == MOUSE_IN_GOLD_ICON) {
-			SpecialCursor=CURSOR_INTERACTION_ON;
-			
+		if(m_isSelected) {
 			Vec2f numberPos = m_rect.topLeft();
 			numberPos += Vec2f(- INTERFACE_RATIO(30), + INTERFACE_RATIO(10 - 25));
 			
 			ARX_INTERFACE_DrawNumber(numberPos, player.gold, 6, Color::white);
 		}
 	}
-	
-	void drawHalo() {
-		//A halo is drawn on the character's stats icon (book) when leveling up, for example.
-		if(bGoldHalo) {
-			float fCalc = ulGoldHaloTime + Original_framedelay;
-			ulGoldHaloTime = checked_range_cast<unsigned long>(fCalc);
-			if(ulGoldHaloTime >= 1000) { // ms
-				bGoldHalo = false;
-			}
-			DrawHalo(0.9f, 0.9f, 0.1f, m_tex->getHalo(), m_rect.topLeft());
-		}
-	}
 };
 
 static PurseIconGui purseIconGui;
+
+void purseIconGuiRequestHalo() {
+	purseIconGui.requestHalo();
+}
+
 
 class CurrentTorchIconGui {
 private:
@@ -1242,7 +1300,7 @@ public:
 				eMouseState=MOUSE_IN_TORCH_ICON;
 				SpecialCursor=CURSOR_INTERACTION_ON;
 
-				if((LastMouseClick & 1) && !(EERIEMouseButton & 1)) {
+				if(eeMouseUp1()) {
 					Entity * temp = player.torch;
 
 					if(temp && !temp->locname.empty()) {
@@ -1291,14 +1349,14 @@ public:
 					ARX_SOUND_Stop(SND_TORCH_LOOP);
 					player.torch=NULL;
 					lightHandleGet(torchLightHandle)->exist = 0;
+					io->ignition=1;
 					Set_DragInter(io);
-					DRAGINTER->ignition=1;
 				} else {
 					if((EERIEMouseButton & 4) && !COMBINE) {
 						COMBINE = player.torch;
 					}
 
-					if(!(EERIEMouseButton & 2) && (LastMouseClick & 2)) {
+					if(eeMouseUp2()) {
 						ARX_PLAYER_ClickedOnTorch(player.torch);
 						EERIEMouseButton &= ~2;
 						TRUE_PLAYER_MOUSELOOK_ON = false;
@@ -1394,7 +1452,7 @@ public:
 		
 	    if(m_rect.contains(Vec2f(DANAEMouse))) {
 			SpecialCursor=CURSOR_INTERACTION_ON;
-			if(!(EERIEMouseButton & 1) && (LastMouseClick & 1)) {
+			if(eeMouseUp1()) {
 				CHANGE_LEVEL_ICON = 200;
 			}
 		}
@@ -1520,7 +1578,7 @@ public:
 					ARX_INTERFACE_HALO_Render(Color3f(0.2f, 0.4f, 0.8f), HALO_ACTIVE, tc->getHalo(), pos, Vec2f(m_scale));
 				}
 				
-				if(!(player.rune_flags & (RuneFlag)(1<<player.SpellToMemorize.iSpellSymbols[i]))) {
+				if(!player.hasRune(player.SpellToMemorize.iSpellSymbols[i])) {
 					GRenderer->SetBlendFunc(Renderer::BlendInvDstColor, Renderer::BlendOne);
 					GRenderer->SetRenderState(Renderer::AlphaBlending, true);
 					EERIEDrawBitmap2(rect, 0, cursorMovable, Color3f::gray(.8f).to<u8>());
@@ -1560,8 +1618,6 @@ public:
 	
 	void updateRect(const Rectf & parent) {
 		m_rect = createChild(parent, Anchor_BottomLeft, m_size * m_scale, Anchor_BottomLeft);
-		m_rect.left += -lSLID_VALUE;
-		m_rect.right += -lSLID_VALUE;
 	}
 	
 	void update() {
@@ -1584,7 +1640,7 @@ public:
 		
 		if(!(player.Interface & INTER_COMBATMODE)) {
 			if(m_rect.contains(Vec2f(DANAEMouse))) {
-				if((EERIEMouseButton & 1) && !(LastMouseClick & 1)) {
+				if(eeMouseDown1()) {
 					std::stringstream ss;
 					ss << checked_range_cast<int>(player.lifePool.current);
 					ARX_SPEECH_Add(ss.str());
@@ -1607,6 +1663,9 @@ public:
 	ManaGauge()
 		: HudItem()
 		, m_size(33.f, 80.f)
+		, m_emptyTex(NULL)
+		, m_filledTex(NULL)
+		, m_amount(0.f)
 	{}
 	
 	void init() {
@@ -1630,7 +1689,7 @@ public:
 		
 		if(!(player.Interface & INTER_COMBATMODE)) {
 			if(m_rect.contains(Vec2f(DANAEMouse))) {
-				if((EERIEMouseButton & 1) && !(LastMouseClick & 1)) {
+				if(eeMouseDown1()) {
 					std::stringstream ss;
 					ss << checked_range_cast<int>(player.manaPool.current);
 					ARX_SPEECH_Add(ss.str());
@@ -1766,7 +1825,7 @@ private:
 			if(m_rect.contains(Vec2f(DANAEMouse))) {
 				SpecialCursor = CURSOR_INTERACTION_ON;
 				
-				if((LastMouseClick & 1) && !(EERIEMouseButton & 1)) {
+				if(eeMouseUp1()) {
 					if(Precast[m_precastIndex].typ >= 0)
 						WILLADDSPEECH = spellicons[Precast[m_precastIndex].typ].name;
 					
@@ -1899,7 +1958,7 @@ private:
 			if(m_rect.contains(Vec2f(DANAEMouse))) {
 				SpecialCursor = CURSOR_INTERACTION_ON;
 				
-				if((LastMouseClick & 1) && !(EERIEMouseButton & 1)) {
+				if(eeMouseUp1()) {
 					if(spells[spellIndex]->m_type >= 0)
 						WILLADDSPEECH = spellicons[spells[spellIndex]->m_type].name;
 					
@@ -2216,6 +2275,11 @@ void setHudScale(float scale) {
 
 void ArxGame::drawAllInterface() {
 	
+	Rectf hudSlider = Rectf(g_size);
+	hudSlider.left  -= lSLID_VALUE;
+	hudSlider.right += lSLID_VALUE;
+	
+	
 	hitStrengthGauge.updateRect(Rectf(g_size));
 	hitStrengthGauge.update();
 	
@@ -2303,25 +2367,27 @@ void ArxGame::drawAllInterface() {
 
 	if((player.Interface & INTER_MAP) && !(player.Interface & INTER_COMBATMODE)) {
 		ARX_INTERFACE_ManageOpenedBook();
-		ARX_INTERFACE_ManageOpenedBook_Finish();
+		
+		GRenderer->SetRenderState(Renderer::DepthWrite, true);
+		
+		if((player.Interface & INTER_MAP) && !(player.Interface & INTER_COMBATMODE)) {
+			if(Book_Mode == BOOKMODE_SPELLS) {
+				gui::ARX_INTERFACE_ManageOpenedBook_Finish();
+				ARX_INTERFACE_ManageOpenedBook_SpellsDraw();
+			}
+		}
 	}
 	
 	if(CurrSpellSymbol || player.SpellToMemorize.bSpell) {
 		memorizedRunesHud.draw();
 	}
 	
-	healthGauge.updateRect(Rectf(g_size));
+	healthGauge.updateRect(hudSlider);
 	healthGauge.update();
-	
-
 	
 	
 	if(player.Interface & INTER_LIFE_MANA) {
-		
-		Rectf manaGaugeParent = Rectf(g_size);
-		manaGaugeParent.left  += lSLID_VALUE;
-		manaGaugeParent.right += lSLID_VALUE;
-		manaGauge.update(manaGaugeParent);
+		manaGauge.update(hudSlider);
 		manaGauge.draw();
 		
 		healthGauge.draw();
@@ -2339,10 +2405,25 @@ void ArxGame::drawAllInterface() {
 	
 	if(!(player.Interface & INTER_COMBATMODE) && (player.Interface & INTER_MINIBACK)) {
 		
-		backpackIconGui.update(manaGauge.rect());
-		bookIconGui.update(backpackIconGui.rect());
-		purseIconGui.update(bookIconGui.rect());
-		levelUpIconGui.update(purseIconGui.rect());
+		{
+		Rectf spacer = createChild(manaGauge.rect(), Anchor_TopRight, Vec2f(0, 3), Anchor_BottomRight);
+		backpackIconGui.update(spacer);
+		}
+		
+		{
+		Rectf spacer = createChild(backpackIconGui.rect(), Anchor_TopRight, Vec2f(0, 3), Anchor_BottomRight);
+		bookIconGui.update(spacer);
+		}
+		
+		{
+		Rectf spacer = createChild(bookIconGui.rect(), Anchor_TopRight, Vec2f(0, 3), Anchor_BottomRight);
+		purseIconGui.update(spacer);
+		}
+		
+		{
+		Rectf spacer = createChild(purseIconGui.rect(), Anchor_TopRight, Vec2f(0, 3), Anchor_BottomRight);
+		levelUpIconGui.update(spacer);
+		}
 		
 		backpackIconGui.draw();
 		bookIconGui.draw();
@@ -2352,13 +2433,7 @@ void ArxGame::drawAllInterface() {
 			purseIconGui.draw();
 		}
 		
-		if(player.Skill_Redistribute || player.Attribute_Redistribute) {
-			levelUpIconGui.draw();
-		}
-		
-		//A halo is drawn on the character's stats icon (book) when leveling up, for example.
-		purseIconGui.drawHalo();
-		bookIconGui.drawHalo();
+		levelUpIconGui.draw();
 	}
 	
 	GRenderer->GetTextureStage(0)->setMinFilter(TextureStage::FilterLinear);

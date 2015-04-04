@@ -464,9 +464,7 @@ if(NOT MSVC)
 	
 	if(USE_STATIC_LIBS)
 		add_ldflag("-static-libstdc++")
-		if(WIN32)
-			add_ldflag("-static-libgcc")
-		endif()
+		add_ldflag("-static-libgcc")
 	endif()
 	
 	if(USE_CXX11)
@@ -773,11 +771,12 @@ set(GUI_SOURCES
 	src/gui/MenuPublic.cpp
 	src/gui/MenuWidgets.cpp
 	src/gui/MiniMap.cpp
-	src/gui/Necklace.cpp
 	src/gui/Note.cpp
 	src/gui/Speech.cpp
 	src/gui/Text.cpp
 	src/gui/TextManager.cpp
+	src/gui/book/Book.cpp
+	src/gui/book/Necklace.cpp
 )
 
 set(INPUT_SOURCES src/input/Input.cpp)

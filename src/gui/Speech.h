@@ -78,9 +78,9 @@ struct CinematicSpeech {
 	Anglef endangle;
 	float startpos;
 	float endpos;
-	float f0;
-	float f1;
-	float f2;
+	float m_startdist;
+	float m_enddist;
+	float m_heightModifier;
 	EntityHandle ionum;
 	Vec3f pos1;
 	Vec3f pos2;
@@ -91,9 +91,9 @@ struct CinematicSpeech {
 		, endangle(Anglef::ZERO)
 		, startpos(0.f)
 		, endpos(0.f)
-		, f0(0.f)
-		, f1(0.f)
-		, f2(0.f)
+		, m_startdist(0.f)
+		, m_enddist(0.f)
+		, m_heightModifier(0.f)
 		, ionum(0)
 		, pos1(Vec3f_ZERO)
 		, pos2(Vec3f_ZERO)
@@ -105,20 +105,13 @@ struct CinematicSpeech {
 		endangle = Anglef::ZERO;
 		startpos = 0;
 		endpos = 0;
-		f0 = 0;
-		f1 = 0;
+		m_startdist = 0;
+		m_enddist = 0;
 		ionum = EntityHandle(0);
 		pos1 = Vec3f_ZERO;
 		pos2 = Vec3f_ZERO;
 	}
 	
-};
-
-const size_t MAX_ACTORS = 10;
-struct ARX_CONVERSATION_STRUCT {
-	long actors_nb;
-	EntityHandle actors[MAX_ACTORS];
-	long current;
 };
 
 struct Notification {
@@ -184,10 +177,8 @@ struct ARX_SPEECH {
 
 const size_t MAX_ASPEECH = 100;
 extern ARX_SPEECH aspeech[MAX_ASPEECH];
-extern ARX_CONVERSATION_STRUCT main_conversation;
 
-void ARX_CONVERSATION_FirstInit();
-void ARX_CONVERSATION_Reset();
+extern Notification speech[MAX_SPEECH];
 
 void ARX_SPEECH_FirstInit();
 void ARX_SPEECH_Reset();
@@ -210,6 +201,5 @@ long ARX_SPEECH_AddSpeech(Entity * io, const std::string & data, long mood, Spee
 void ARX_SPEECH_ReleaseIOSpeech(Entity * io);
 void ARX_SPEECH_ClearIOSpeech(Entity * io);
 void ARX_SPEECH_Launch_No_Unicode_Seek(const std::string & string, Entity * io_source);
-bool ApplySpeechPos(EERIE_CAMERA * conversationcamera, long is);
 
 #endif // ARX_GUI_SPEECH_H

@@ -112,10 +112,7 @@ static void ARX_UNICODE_FormattingInRect(Font * font, const std::string & text,
 	std::string::const_iterator next = it;
 	for(it = text.begin(); it != text.end(); it = next) {
 		
-		next = it + 1;
-		while(next != text.end() && util::UTF8::isContinuationByte(*next)) {
-			++next;
-		}
+		next = util::UTF8::next(it, text.end());
 		
 		// Line break ?
 		bool isLineBreak = false;
@@ -135,11 +132,14 @@ static void ARX_UNICODE_FormattingInRect(Font * font, const std::string & text,
 				if(itLastWordBreak > itLastLineBreak) {
 					// Draw a line from the last line break up to the last word break
 					it = itLastWordBreak;
+					next = util::UTF8::next(it, text.end());
 				} else if(it == itLastLineBreak) {
 					// Not enough space to render even one character!
 					break;
 				} else {
 					// The current word is too long to fit on a line, force a line break
+					// Don't skip a character after the forced line break.
+					next = it;
 				}
 			}
 		}
@@ -159,9 +159,7 @@ static void ARX_UNICODE_FormattingInRect(Font * font, const std::string & text,
 				font->draw(rect.left, penY, itTextStart, itTextEnd, col);
 			}
 			
-			if(it != text.end()) {
-				itLastLineBreak = next;
-			}
+			itLastLineBreak = next;
 			
 			penY += font->getLineHeight();
 			

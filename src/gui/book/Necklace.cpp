@@ -17,9 +17,20 @@
  * along with Arx Libertatis.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "gui/Necklace.h"
+#include "gui/book/Necklace.h"
 
+#include "animation/AnimationRender.h"
+#include "core/Application.h"
+#include "core/Core.h"
+#include "core/GameTime.h"
+#include "game/Camera.h"
+#include "game/EntityManager.h"
+#include "game/Player.h"
+#include "gui/Interface.h"
 #include "graphics/data/TextureContainer.h"
+#include "graphics/Renderer.h"
+#include "scene/GameSound.h"
+#include "scene/Light.h"
 #include "scene/Object.h"
 
 namespace gui {
@@ -73,7 +84,7 @@ void NecklaceInit() {
 	necklace.pTexTab[RUNE_VITAE]       = TextureContainer::LoadUI("graph/obj3d/interactive/items/magic/rune_aam/rune_vitae[icon]");
 	necklace.pTexTab[RUNE_YOK]         = TextureContainer::LoadUI("graph/obj3d/interactive/items/magic/rune_aam/rune_yok[icon]");
 	
-	for(size_t i = 0; i < RUNE_COUNT-1; i++) { // TODO why -1?
+	for(size_t i = 0; i < RUNE_COUNT; i++) {
 		if(necklace.pTexTab[i]) {
 			necklace.pTexTab[i]->getHalo();
 		}
@@ -84,11 +95,152 @@ void ReleaseNecklace() {
 	
 	delete necklace.lacet, necklace.lacet = NULL;
 	
-	for(long i = 0; i < 20; i++) {
+	for(long i = 0; i < RUNE_COUNT; i++) {
 		delete necklace.runes[i], necklace.runes[i] = NULL;
 		necklace.pTexTab[i] = NULL;
 	}
 }
 
+
+static void PlayerBookDrawRune(Rune rune) {
+	
+	ARX_SPELLS_RequestSymbolDraw2(entities.player(), rune, ARX_SOUND_GetDuration(SND_SYMB[rune]));
+	ARX_SOUND_PlayInterface(SND_SYMB[rune]);
+}
+
+
+long LastRune = -1;
+
+void ARX_INTERFACE_ManageOpenedBook_Finish()
+{
+
+	Vec3f pos = Vec3f(0.f, 0.f, 2100.f);
+	Anglef angle = Anglef::ZERO;
+	
+	EERIE_LIGHT * light = lightHandleGet(torchLightHandle);
+	
+	EERIE_LIGHT tl = *light;
+	
+	light->pos = Vec3f(500.f, -1960.f, 1590.f);
+	light->exist = 1;
+	light->rgb = Color3f(0.6f, 0.7f, 0.9f);
+	light->intensity  = 1.8f;
+	light->fallstart=4520.f;
+	light->fallend = light->fallstart + 600.f;
+	RecalcLight(light);
+	
+	EERIE_CAMERA * oldcam = ACTIVECAM;
+	
+	PDL[0] = light;
+	TOTPDL=1;
+	
+	Vec2i tmpPos = Vec2i_ZERO;
+	
+	for(size_t i = 0; i < RUNE_COUNT; i++) {
+		if(!gui::necklace.runes[i])
+			continue;
+		
+		EERIE_3DOBJ * rune = gui::necklace.runes[i];
+		
+		bookcam.center.x = (382 + tmpPos.x * 45 + BOOKDEC.x) * g_sizeRatio.x;
+		bookcam.center.y = (100 + tmpPos.y * 64 + BOOKDEC.y) * g_sizeRatio.y;
+		
+		SetActiveCamera(&bookcam);
+		PrepareCamera(&bookcam, g_size);
+		
+		// First draw the lace
+		angle.setPitch(0.f);
+		
+		if(player.hasRune((Rune)i)) {
+			
+			TransformInfo t1(pos, glm::toQuat(toRotationMatrix(angle)));
+			DrawEERIEInter(gui::necklace.lacet, t1, NULL);
+			
+			if(rune->angle.getPitch() != 0.f) {
+				if(rune->angle.getPitch() > 300.f)
+					rune->angle.setPitch(300.f);
+				
+				angle.setPitch(std::sin(arxtime.get_updated() * (1.0f / 200)) * rune->angle.getPitch() * (1.0f / 40));
+			}
+			
+			rune->angle.setPitch(rune->angle.getPitch() - framedelay * 0.2f);
+			
+			if(rune->angle.getPitch() < 0.f)
+				rune->angle.setPitch(0.f);
+			
+			GRenderer->SetRenderState(Renderer::DepthWrite, true);
+			GRenderer->SetRenderState(Renderer::AlphaBlending, false);
+			
+			// Now draw the rune
+			TransformInfo t2(pos, glm::toQuat(toRotationMatrix(angle)));
+			DrawEERIEInter(rune, t2, NULL);
+			
+			EERIE_2D_BBOX runeBox;
+			UpdateBbox2d(*rune, runeBox);
+			
+			PopAllTriangleList();
+			
+			tmpPos.x++;
+			
+			if(tmpPos.x > 4) {
+				tmpPos.x = 0;
+				tmpPos.y++;
+			}
+			
+			const Rect runeMouseTestRect(
+			runeBox.min.x,
+			runeBox.min.y,
+			runeBox.max.x,
+			runeBox.max.y
+			);
+			
+			// Checks for Mouse floating over a rune...
+			if(runeMouseTestRect.contains(Vec2i(DANAEMouse))) {
+				long r=0;
+				
+				for(size_t j = 0; j < rune->facelist.size(); j++) {
+					float n = PtIn2DPolyProj(rune, &rune->facelist[j], (float)DANAEMouse.x, (float)DANAEMouse.y);
+					
+					if(n!=0.f) {
+						r=1;
+						break;
+					}
+				}
+				
+				if(r) {
+					GRenderer->SetRenderState(Renderer::AlphaBlending, true);
+					GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
+					
+					TransformInfo t(pos, glm::toQuat(toRotationMatrix(angle)));
+					DrawEERIEInter(rune, t, NULL);
+					
+					rune->angle.setPitch(rune->angle.getPitch() + framedelay*2.f);
+					
+					PopAllTriangleList();
+					
+					GRenderer->SetRenderState(Renderer::AlphaBlending, false);
+					
+					SpecialCursor=CURSOR_INTERACTION_ON;
+					
+					if(eeMouseDown1())
+						if((size_t)LastRune != i) {
+							PlayerBookDrawRune((Rune)i);
+						}
+						
+						LastRune=i;
+				}
+			}
+		}
+	}
+	
+	GRenderer->SetCulling(Renderer::CullCCW);
+	
+	LastRune=-1;
+	
+	*light = tl;
+	
+	SetActiveCamera(oldcam);
+	PrepareCamera(oldcam, g_size);
+}
 
 }

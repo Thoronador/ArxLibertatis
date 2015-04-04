@@ -75,18 +75,19 @@ void Manage_sp_max() {
 	if(sp_max_start != 0 && v < 20000) {
 		float modi = (20000 - v) * ( 1.0f / 2000 ) * ( 1.0f / 10 );
 		float sizX = 16;
-		float px = (float)g_size.center().x - (float)sp_max_ch.length() * ( 1.0f / 2 ) * sizX;
-		float py = (float)g_size.center().y;
-
+		
+		Vec2f p = Vec2f(g_size.center());
+		p.x -= (float)sp_max_ch.length() * ( 1.0f / 2 ) * sizX;
+		
 		for(size_t i = 0; i < sp_max_ch.length(); i++) {
-			float dx = px + sizX * (float)i;
-			float dy = py + sp_max_y[i];
-			sp_max_y[i] = std::sin(dx + (float)float(arxtime) * ( 1.0f / 100 )) * 30.f * modi;
+			Vec2f d = p + Vec2f(sizX * (float)i, sp_max_y[i]);
+			
+			sp_max_y[i] = std::sin(d.x + (float)float(arxtime) * ( 1.0f / 100 )) * 30.f * modi;
 			std::string tex(1, sp_max_ch[i]);
 
-			UNICODE_ARXDrawTextCenter(hFontInBook, Vec2f(dx - 1, dy - 1), tex, Color::none);
-			UNICODE_ARXDrawTextCenter(hFontInBook, Vec2f(dx + 1, dy + 1), tex, Color::none);
-			UNICODE_ARXDrawTextCenter(hFontInBook, Vec2f(dx, dy), tex, sp_max_col[i]);
+			UNICODE_ARXDrawTextCenter(hFontInBook, d + Vec2f(-1,-1), tex, Color::none);
+			UNICODE_ARXDrawTextCenter(hFontInBook, d + Vec2f( 1, 1), tex, Color::none);
+			UNICODE_ARXDrawTextCenter(hFontInBook, d, tex, sp_max_col[i]);
 		}
 	}
 }

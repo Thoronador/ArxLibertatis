@@ -280,3 +280,45 @@ void LegacyMathTest::inventorySizeTest() {
 		CPPUNIT_ASSERT_EQUAL_MESSAGE(glm::to_string(Vec2i(i, j)), expected, result2);
 	}
 }
+
+void LegacyMathTest::angleToVectorXZ_Test() {
+	
+	for(float angle = -1000; angle < 1000; angle += 0.01) {
+		Vec3f expected = angleToVectorXZ(angle);
+		Vec3f result = angleToVectorXZ_180offset(angle + 180);
+		
+		Vec3f result2 = VRotateY(Vec3f(0.f, 0.f, 1.f), float(360 - angle));
+		
+		CPPUNIT_ASSERT_EQUAL(expected, result);
+		CPPUNIT_ASSERT_EQUAL(expected, result2);
+	}
+}
+
+void LegacyMathTest::vectorRotateTest() {
+	
+	for(float angle = 0; angle < 720; angle += 10) {
+		
+		Vec3f foo = Vec3f(0.f, 0.f, 1.f);
+		
+		Vec3f result;
+		VectorRotateY(foo, result, glm::radians(angle));
+		
+		Vec3f result2 = VRotateY(foo, angle);
+		
+		CPPUNIT_ASSERT_EQUAL(result, result2);
+	}
+	
+	for(float angle = 0; angle < 720; angle += 10) {
+		
+		Vec3f foo = Vec3f(1.f, 0.f, 0.f);
+		
+		Vec3f result;
+		VectorRotateZ(foo, result, glm::radians(angle));
+		
+		Vec3f result2 = VRotateZ(foo, angle);
+		
+		//std::cout << angle << "; " << glm::to_string(result) << glm::to_string(result2) << "\n";
+		
+		CPPUNIT_ASSERT_EQUAL(result, result2);
+	}
+}

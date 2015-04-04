@@ -143,9 +143,8 @@ void FireballSpell::Launch()
 		if(ValidIONum(m_caster)) {
 			Entity * c = entities[m_caster];
 			if(c->ioflags & IO_NPC) {
-				target.x -= std::sin(glm::radians(c->angle.getPitch())) * 30.f;
-				target.y -= 80.f;
-				target.z += std::cos(glm::radians(c->angle.getPitch())) * 30.f;
+				target += angleToVectorXZ(c->angle.getPitch()) * 30.f;
+				target += Vec3f(0.f, -80.f, 0.f);
 			}
 		}
 	}
@@ -215,28 +214,23 @@ void FireballSpell::Update(float timeDelta)
 			afAlpha = player.angle.getYaw();
 			long idx = GetGroupOriginByName(entities[m_caster]->obj, "chest");
 
-			if(idx) {
-				effect->eCurPos.x = entities[m_caster]->obj->vertexlist3[idx].v.x - std::sin(glm::radians(afBeta)) * 60;
-				effect->eCurPos.y = entities[m_caster]->obj->vertexlist3[idx].v.y;
-				effect->eCurPos.z = entities[m_caster]->obj->vertexlist3[idx].v.z + std::cos(glm::radians(afBeta)) * 60;
+			if(idx >= 0) {
+				effect->eCurPos = entities[m_caster]->obj->vertexlist3[idx].v;
 			} else {
-				effect->eCurPos.x = player.pos.x - std::sin(glm::radians(afBeta)) * 60;
-				effect->eCurPos.y = player.pos.y;
-				effect->eCurPos.z = player.pos.z + std::cos(glm::radians(afBeta)) * 60;
+				effect->eCurPos = player.pos;
 			}
+			
+			effect->eCurPos += angleToVectorXZ(afBeta) * 60.f;
 		} else {
 			afBeta = entities[m_caster]->angle.getPitch();
-
-			effect->eCurPos.x = entities[m_caster]->pos.x - std::sin(glm::radians(afBeta)) * 60;
-			effect->eCurPos.y = entities[m_caster]->pos.y;
-			effect->eCurPos.z = entities[m_caster]->pos.z + std::cos(glm::radians(afBeta)) * 60;
-
-			if ((ValidIONum(m_caster))
-			        && (entities[m_caster]->ioflags & IO_NPC))
-			{
-				effect->eCurPos.x -= std::sin(glm::radians(entities[m_caster]->angle.getPitch())) * 30.f;
-				effect->eCurPos.y -= 80.f;
-				effect->eCurPos.z += std::cos(glm::radians(entities[m_caster]->angle.getPitch())) * 30.f;
+			
+			effect->eCurPos = entities[m_caster]->pos;
+			effect->eCurPos += angleToVectorXZ(afBeta) * 60.f;
+			
+			if(ValidIONum(m_caster) && (entities[m_caster]->ioflags & IO_NPC)) {
+				
+				effect->eCurPos += angleToVectorXZ(entities[m_caster]->angle.getPitch()) * 30.f;
+				effect->eCurPos += Vec3f(0.f, -80.f, 0.f);
 			}
 			
 			Entity * io = entities[m_caster];
@@ -248,10 +242,8 @@ void FireballSpell::Update(float timeDelta)
 				afAlpha = 360.f - (glm::degrees(getAngle(p1->y, p1->z, p2.y, p2.z + glm::distance(Vec2f(p2.x, p2.z), Vec2f(p1->x, p1->z))))); //alpha entre orgn et dest;
 			}
 		}
-
-		effect->eMove.x = - std::sin(glm::radians(afBeta)) * 100 * glm::cos(glm::radians(MAKEANGLE(afAlpha)));
-		effect->eMove.y = glm::sin(glm::radians(MAKEANGLE(afAlpha))) * 100;
-		effect->eMove.z = + std::cos(glm::radians(afBeta)) * 100 * glm::cos(glm::radians(MAKEANGLE(afAlpha)));
+		
+		effect->eMove = angleToVector(Anglef(afAlpha, afBeta, 0.f)) * 100.f;
 	}
 	
 	effect->eCurPos += effect->eMove * (timeDelta * 0.0045f);
@@ -349,9 +341,8 @@ void IceProjectileSpell::Launch()
 		target = entities[m_caster]->pos;
 		angleb = entities[m_caster]->angle.getPitch();
 	}
-	angleb = MAKEANGLE(angleb);
-	target.x -= std::sin(glm::radians(angleb)) * 150.0f;
-	target.z += std::cos(glm::radians(angleb)) * 150.0f;
+	target += angleToVectorXZ(angleb) * 150.0f;
+	
 	effect->Create(target, angleb, m_level, m_caster);
 	
 	effect->SetDuration(m_duration);

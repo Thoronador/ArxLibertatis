@@ -309,7 +309,7 @@ static void TransformLocalVertex(Vec3f * vbase, TexturedVertex * d3dv) {
 void DrawGrille(CinematicGrid * grille, Color col, int fx, CinematicLight * light, Vec3f * posgrille, float angzgrille)
 {
 	int nb = grille->m_nbvertexs;
-	Vec3f * v = grille->m_vertexs;
+	Vec3f * v = grille->m_vertexs.data();
 	TexturedVertex * d3dv = AllTLVertex;
 
 	LocalPos = *posgrille;
@@ -354,7 +354,7 @@ void DrawGrille(CinematicGrid * grille, Color col, int fx, CinematicLight * ligh
 		}
 	}
 
-	C_UV* uvs = grille->m_uvs;
+	C_UV* uvs = grille->m_uvs.data();
 
 	for(std::vector<C_INDEXED>::iterator it = grille->m_mats.begin(); it != grille->m_mats.end(); ++it)
 	{
@@ -372,7 +372,7 @@ void DrawGrille(CinematicGrid * grille, Color col, int fx, CinematicLight * ligh
 		}
 		
 		GRenderer->drawIndexed(Renderer::TriangleList, AllTLVertex, grille->m_nbvertexs,
-		                       &grille->m_inds->i1 + mat->startind, mat->nbind);
+		                       &grille->m_inds.data()->i1 + mat->startind, mat->nbind);
 	}
 }
 /*---------------------------------------------------------------*/

@@ -94,13 +94,10 @@ void CFireBall::Create(Vec3f aeSrc, float afBeta, float afAlpha)
 {
 	SetDuration(ulDuration);
 	
-	eSrc.x = aeSrc.x - std::sin(glm::radians(afBeta)) * 60;
-	eSrc.y = aeSrc.y;
-	eSrc.z = aeSrc.z + std::cos(glm::radians(afBeta)) * 60;
-
-	eMove.x = - std::sin(glm::radians(afBeta)) * 80 * glm::cos(glm::radians(MAKEANGLE(afAlpha)));
-	eMove.y = glm::sin(glm::radians(MAKEANGLE(afAlpha))) * 80;
-	eMove.z = + std::cos(glm::radians(afBeta)) * 80 * glm::cos(glm::radians(MAKEANGLE(afAlpha)));
+	eSrc = aeSrc;
+	eSrc += angleToVectorXZ(afBeta) * 60.f;
+	
+	eMove = angleToVector(Anglef(afAlpha, afBeta, 0.f)) * 80.f;
 	
 	// Light
 	lLightId = LightHandle::Invalid;
@@ -209,7 +206,7 @@ void CIceProjectile::Create(Vec3f aeSrc, float afBeta, float fLevel, EntityHandl
 	tv1a[0] = s + Vec3f(0.f, 100.f, 0.f);
 	tv1a[end] = e + Vec3f(0.f, 100.f, 0.f);
 
-	Split(tv1a, 0, end, 80, 0.5f, 0, 1, 80, 0.5f);
+	Split(tv1a, 0, end, Vec3f(80, 0, 80), Vec3f(0.5f, 1, 0.5f));
 
 	for(int i = 0; i < iNumber; i++) {
 		Icicle & icicle = m_icicles[i];

@@ -94,7 +94,7 @@ void ARX_SPELLS_UpdateSymbolDraw() {
 
 		if(io->spellcast_data.castingspell != SPELL_NONE) {
 			if(!io->symboldraw) {
-				long tst = 0;
+				bool tst = false;
 
 				if(!(io->spellcast_data.spell_flags & SPELLCAST_FLAG_NOANIM) && (io->ioflags & IO_NPC)) {
 					ANIM_USE * ause1 = &io->animlayer[1];
@@ -103,14 +103,14 @@ void ARX_SPELLS_UpdateSymbolDraw() {
 						// TODO why no AcquireLastAnim() like everywhere else?
 						FinishAnim(io, ause1->cur_anim);
 						ANIM_Set(ause1, io->anims[ANIM_CAST_CYCLE]);
-						tst = 1;
+						tst = true;
 					} else if(ause1->cur_anim == io->anims[ANIM_CAST_CYCLE]) {
-						tst = 1;
+						tst = true;
 					} else if(ause1->cur_anim != io->anims[ANIM_CAST_START]) {
 						io->spellcast_data.castingspell = SPELL_NONE;
 					}
 				} else {
-					tst = 1;
+					tst = true;
 				}
 
 				if(io->spellcast_data.symb[0] != RUNE_NONE && tst) {
@@ -142,10 +142,11 @@ void ARX_SPELLS_UpdateSymbolDraw() {
 			if(lightHandleIsValid(io->dynlight)) {
 				EERIE_LIGHT * light = lightHandleGet(io->dynlight);
 				
+				light->pos = io->pos;
+				light->pos += angleToVectorXZ(io->angle.getPitch() - 45.f) * 60.f;
+				light->pos += Vec3f(0.f, -120.f, 0.f);
+				
 				float rr = rnd();
-				light->pos.x = io->pos.x - std::sin(glm::radians(MAKEANGLE(io->angle.getPitch() - 45.f)))*60.f;
-				light->pos.y = io->pos.y - 120.f;
-				light->pos.z = io->pos.z + std::cos(glm::radians(MAKEANGLE(io->angle.getPitch() - 45.f)))*60.f;
 				light->fallstart=140.f+(float)io->flarecount*0.333333f+rr*5.f;
 				light->fallend=220.f+(float)io->flarecount*0.5f+rr*5.f;
 				light->intensity=1.6f;
@@ -188,8 +189,7 @@ void ARX_SPELLS_UpdateSymbolDraw() {
 
 			if(ti <= 0)
 				ti = 1;
-
-			Vec2s pos1, old_pos;
+			
 			long newtime=tim;
 			long oldtime=sd->lasttim;
 
@@ -200,14 +200,16 @@ void ARX_SPELLS_UpdateSymbolDraw() {
 				newtime=sd->duration;
 
 			sd->lasttim=(short)tim;
-
-			pos1.x = (short)subj.center.x - symbolVecScale.x * 2 + sd->cPosStart.x * symbolVecScale.x;
-			pos1.y = (short)subj.center.y - symbolVecScale.y * 2 + sd->cPosStart.y * symbolVecScale.y;
-
+			
 			float div_ti=1.f/ti;
 
 			if(io != entities.player()) {
-				old_pos = pos1;
+				
+				Vec2s pos1;
+				pos1.x = (short)subj.center.x - symbolVecScale.x * 2 + sd->cPosStart.x * symbolVecScale.x;
+				pos1.y = (short)subj.center.y - symbolVecScale.y * 2 + sd->cPosStart.y * symbolVecScale.y;
+				
+				Vec2s old_pos = pos1;
 
 				for(long j = 0; j < nbcomponents; j++) {
 					Vec2s vect = GetSymbVector(sd->sequence[j]);
@@ -246,7 +248,7 @@ void ARX_SPELLS_UpdateSymbolDraw() {
 				
 				ReCenterSequence(sd->sequence, iMin, iMax);
 				Vec2s iSize = iMax - iMin;
-				pos1 = Vec2s(97, 64);
+				Vec2s pos1 = Vec2s(97, 64);
 				
 				Vec2s lPos;
 				lPos.x = (((513>>1)-lMaxSymbolDrawSize.x)>>1);
@@ -304,10 +306,14 @@ static void ARX_SPELLS_RequestSymbolDrawCommon(Entity * io, float duration,
 
 	sd->starttime = (unsigned long)(arxtime);
 	sd->lasttim = 0;
-	sd->lastpos.x = io->pos.x - std::sin(glm::radians(MAKEANGLE(io->angle.getPitch() - 45.0F + info.startOffset.x*2))) * 60.0F;
-	sd->lastpos.y = io->pos.y - 120.0F - info.startOffset.y*5;
-	sd->lastpos.z = io->pos.z + std::cos(glm::radians(MAKEANGLE(io->angle.getPitch() - 45.0F + info.startOffset.x * 2))) * 60.0F;
-
+	
+	float tmpAngle = io->angle.getPitch() - 45.0F + info.startOffset.x * 2;
+	
+	sd->lastpos = io->pos;
+	sd->lastpos += angleToVectorXZ(tmpAngle) * 60.f;
+	sd->lastpos += Vec3f(0.f, -120.0f, 0.f);
+	sd->lastpos += Vec3f(0.f, -info.startOffset.y * 5, 0.f);
+	
 	sd->cPosStart = info.startOffset;
 
 	io->gameFlags &= ~GFLAG_INVISIBILITY;

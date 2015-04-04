@@ -172,7 +172,6 @@ glm::quat QuatFromAngles(const Anglef & angle);
 glm::mat4 toRotationMatrix(const Anglef & angle);
 
 glm::quat angleToQuatForArrow(const Anglef & angle);
-Vec3f angleToVecForArrow(const Anglef & angle);
 
 glm::quat angleToQuatForExtraRotation(const Anglef & angle);
 
@@ -195,6 +194,14 @@ inline void XRotatePoint(Vec3f * in, Vec3f * out, float c, float s) {
 Vec3f VRotateX(const Vec3f in, const float angle);
 Vec3f VRotateY(const Vec3f in, const float angle);
 Vec3f VRotateZ(const Vec3f in, const float angle);
+
+// Rotates counterclockwise zero at (0, 0, 1);
+Vec3f angleToVectorXZ(float angleDegrees);
+
+// Rotates counterclockwise zero at (0, 0, -1);
+Vec3f angleToVectorXZ_180offset(float angleDegrees);
+
+Vec3f angleToVector(const Anglef & angle);
 
 void CalcFaceNormal(EERIEPOLY * ep, const TexturedVertex * v);
 void CalcObjFaceNormal(const Vec3f * v0, const Vec3f * v1, const Vec3f * v2, EERIE_FACE * ef);

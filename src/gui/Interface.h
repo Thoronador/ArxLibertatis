@@ -53,6 +53,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 #include "Configure.h"
 
+#include "gui/book/Book.h"
 #include "gui/CinematicBorder.h"
 #include "gui/Note.h"
 
@@ -92,28 +93,10 @@ public:
 		, bookmark_magic(NULL)
 		, bookmark_map(NULL)
 		, bookmark_quest(NULL)
-		
-		, accessible_1(NULL)
-		, accessible_2(NULL)
-		, accessible_3(NULL)
-		, accessible_4(NULL)
-		, accessible_5(NULL)
-		, accessible_6(NULL)
-		, accessible_7(NULL)
-		, accessible_8(NULL)
-		, accessible_9(NULL)
-		, accessible_10(NULL)
-		, current_1(NULL)
-		, current_2(NULL)
-		, current_3(NULL)
-		, current_4(NULL)
-		, current_5(NULL)
-		, current_6(NULL)
-		, current_7(NULL)
-		, current_8(NULL)
-		, current_9(NULL)
-		, current_10(NULL)
-	{}
+	{
+		std::fill_n(accessibleTab, ARRAY_SIZE(accessibleTab), (TextureContainer *)NULL);
+		std::fill_n(currentTab, ARRAY_SIZE(currentTab), (TextureContainer *)NULL);
+	}
 	
 	void Reset();
 	
@@ -142,26 +125,8 @@ public:
 	TextureContainer * bookmark_map;
 	TextureContainer * bookmark_quest;
 	
-	TextureContainer * accessible_1;
-	TextureContainer * accessible_2;
-	TextureContainer * accessible_3;
-	TextureContainer * accessible_4;
-	TextureContainer * accessible_5;
-	TextureContainer * accessible_6;
-	TextureContainer * accessible_7;
-	TextureContainer * accessible_8;
-	TextureContainer * accessible_9;
-	TextureContainer * accessible_10;
-	TextureContainer * current_1;
-	TextureContainer * current_2;
-	TextureContainer * current_3;
-	TextureContainer * current_4;
-	TextureContainer * current_5;
-	TextureContainer * current_6;
-	TextureContainer * current_7;
-	TextureContainer * current_8;
-	TextureContainer * current_9;
-	TextureContainer * current_10;
+	TextureContainer * accessibleTab[10];
+	TextureContainer * currentTab[10];
 	
 	std::string        Level;
 	std::string        Xp;
@@ -171,13 +136,8 @@ enum E_ARX_STATE_MOUSE
 {
 	MOUSE_IN_WORLD,
 	MOUSE_IN_TORCH_ICON,
-	MOUSE_IN_REDIST_ICON,
-	MOUSE_IN_GOLD_ICON,
-	MOUSE_IN_BOOK_ICON,
 	MOUSE_IN_BOOK,
 	MOUSE_IN_INVENTORY_ICON,
-	MOUSE_IN_INVENTORY_PICKALL_ICON,
-	MOUSE_IN_INVENTORY_CLOSE_ICON,
 	MOUSE_IN_STEAL_ICON,
 	MOUSE_IN_INVENTORY,
 	MOUSE_IN_NOTE
@@ -237,29 +197,17 @@ enum ARX_INTERFACE_CURSOR_MODE
 	CURSOR_COMBINEOFF
 };
 
-enum ARX_INTERFACE_BOOK_MODE
-{
-	BOOKMODE_STATS = 0,
-	BOOKMODE_SPELLS,
-	BOOKMODE_MINIMAP,
-	BOOKMODE_QUESTS
-};
-
 //-----------------------------------------------------------------------------
 extern INTERFACE_TC ITC;
 extern Vec2s MemoMouse;
 extern bool bookclick;
 
-extern ARX_INTERFACE_BOOK_MODE Book_Mode;
 extern long SpecialCursor;
 
-extern long LastMouseClick;
 extern long CurrFightPos;
 extern long lSLID_VALUE;
 extern bool bInventoryClosing;
 extern E_ARX_STATE_MOUSE eMouseState;
-extern bool bBookHalo;
-extern unsigned long ulBookHaloTime;
 extern bool bInverseInventory;
 extern bool lOldTruePlayerMouseLook;
 extern bool TRUE_PLAYER_MOUSELOOK_ON;
@@ -289,12 +237,13 @@ enum FadeDirection {
 };
 
 void playerInterfaceFaderRequestFade(FadeDirection showhide, long smooth);
+void playerInterfaceFaderResetSlid();
 void ARX_INTERFACE_Reset();
 
 void ARX_INTERFACE_ManageOpenedBook();
-void ARX_INTERFACE_ManageOpenedBook_Finish();
+void ARX_INTERFACE_ManageOpenedBook_SpellsDraw();
 void ARX_INTERFACE_NoteManage();
-void ARX_INTERFACE_BookOpenClose(unsigned long t);
+
 void ARX_INTERFACE_NoteOpen(gui::Note::Type type, const std::string & tex);
 void ARX_INTERFACE_NoteClose();
 void ARX_INTERFACE_NoteClear();
@@ -310,10 +259,6 @@ void Set_DragInter(Entity * io);
 void ARX_INTERFACE_DrawNumber(const Vec2f & pos, const long num, const int _iNb, const Color color);
 
 void KillInterfaceTextureContainers();
-
-namespace gui {
-void updateQuestBook();
-} // namespace gui
 
 extern bool g_cursorOverBook;
 

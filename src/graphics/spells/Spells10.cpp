@@ -85,15 +85,14 @@ CMassLightning::~CMassLightning() {
 void CMassLightning::Create(Vec3f aePos) {
 	
 	long lMax = 0;
-	Vec3f eTarget;
 	float ft = 360.0f / (float)number;
 
 	for(int i = 0; i < number; i++) {
 		CLightning * lightning = pTab[i];
 		
-		eTarget.x = aePos.x - std::sin(glm::radians(i * ft)) * 500.0f;
-		eTarget.y = aePos.y;
-		eTarget.z = aePos.z + std::cos(glm::radians(i * ft)) * 500.0f;
+		Vec3f eTarget = aePos;
+		eTarget += angleToVectorXZ(i * ft) * 500.0f;
+		
 		lightning->Create(aePos, eTarget);
 		long lTime = ulDuration + Random::get(0, 5000);
 		lightning->SetDuration(lTime);

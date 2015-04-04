@@ -245,11 +245,11 @@ void PutInFrontOfPlayer(Entity * io)
 {
 	if(!io)
 		return;
-
-	float t = glm::radians(player.angle.getPitch());
-	io->pos.x = player.pos.x - std::sin(t) * 80.f;
-	io->pos.y = player.pos.y + 20.f; 
-	io->pos.z = player.pos.z + std::cos(t) * 80.f;
+	
+	io->pos = player.pos;
+	io->pos += angleToVectorXZ(player.angle.getPitch()) * 80.f;
+	io->pos += Vec3f(0.f, 20.f, 0.f);
+	
 	io->velocity.y = 0.3f;
 	io->velocity.x = 0; 
 	io->velocity.z = 0; 
@@ -1388,26 +1388,19 @@ bool InSecondaryInventoryPos(const Vec2s & pos) {
 bool InPlayerInventoryPos(const Vec2s & pos) {
 	Vec2f anchorPos = getInventoryGuiAnchorPosition();
 	
-	float fCenterX	= anchorPos.x;
-	float fSizY		= anchorPos.y;
-
-	short iPosX = checked_range_cast<short>(fCenterX);
-	short iPosY = checked_range_cast<short>(fSizY);
-
-	short tx, ty;
+	Vec2s iPos = Vec2s(anchorPos);
 
 	if(player.Interface & INTER_INVENTORY) {
-		tx = pos.x - iPosX;
-		ty = pos.y - iPosY;//-2;
+		Vec2s t = pos - iPos;
+		
+		if(t.x >= 0 && t.y >= 0) {
+			t.x = t.x / SHORT_INTERFACE_RATIO(32);
+			t.y = t.y / SHORT_INTERFACE_RATIO(32);
 
-		if(tx >= 0 && ty >= 0) {
-			tx = tx / SHORT_INTERFACE_RATIO(32);
-			ty = ty / SHORT_INTERFACE_RATIO(32);
-
-			if(   tx >= 0
-			   && (size_t)tx <= INVENTORY_X
-			   && ty >= 0
-			   && (size_t)ty < INVENTORY_Y
+			if(   t.x >= 0
+			   && (size_t)t.x <= INVENTORY_X
+			   && t.y >= 0
+			   && (size_t)t.y < INVENTORY_Y
 			)
 				return true;
 			else
@@ -1418,26 +1411,26 @@ bool InPlayerInventoryPos(const Vec2s & pos) {
 
 		short iY = checked_range_cast<short>(fBag);
 
-		if(   pos.x >= iPosX
-		   && pos.x <= iPosX + INVENTORY_X * INTERFACE_RATIO(32)
-		   && pos.y >= iPosY + iY
+		if(   pos.x >= iPos.x
+		   && pos.x <= iPos.x + INVENTORY_X * INTERFACE_RATIO(32)
+		   && pos.y >= iPos.y + iY
 		   && pos.y <= g_size.height()
 		) {
 			return true;
 		}
 
 		for(int i = 0; i < player.bag; i++) {
-			tx = pos.x - iPosX;
-			ty = pos.y - iPosY - iY;
+			Vec2s t = pos - iPos;
+			t.y -= iY;
+			
+			if(t.x >= 0 && t.y >= 0) {
+				t.x = t.x / SHORT_INTERFACE_RATIO(32);
+				t.y = t.y / SHORT_INTERFACE_RATIO(32);
 
-			if(tx >= 0 && ty >= 0) {
-				tx = tx / SHORT_INTERFACE_RATIO(32);
-				ty = ty / SHORT_INTERFACE_RATIO(32);
-
-				if(   tx >= 0
-				   && (size_t)tx <= INVENTORY_X
-				   && ty >= 0
-				   && (size_t)ty < INVENTORY_Y
+				if(   t.x >= 0
+				   && (size_t)t.x <= INVENTORY_X
+				   && t.y >= 0
+				   && (size_t)t.y < INVENTORY_Y
 				) {
 					return true;
 				}
@@ -1799,8 +1792,7 @@ bool TakeFromInventory(const Vec2s & pos) {
 	
 	Vec2f anchorPos = getInventoryGuiAnchorPosition();
 	
-	int iPosX = checked_range_cast<int>(anchorPos.x);
-	int iPosY = checked_range_cast<int>(anchorPos.y);
+	Vec2i iPos = Vec2i(anchorPos);
 	
 	if(InPlayerInventoryPos(pos)) {
 		if(!GInput->actionPressed(CONTROLS_CUST_STEALTHMODE)) {
@@ -1817,8 +1809,8 @@ bool TakeFromInventory(const Vec2s & pos) {
 					RemoveFromAllInventories(ioo);
 					sInventory = 1;
 					
-					float fX = (pos.x - iPosX) / INTERFACE_RATIO(32);
-					float fY = (pos.y - iPosY) / INTERFACE_RATIO(32);
+					float fX = (pos.x - iPos.x) / INTERFACE_RATIO(32);
+					float fY = (pos.y - iPos.y) / INTERFACE_RATIO(32);
 					
 					sInventoryPos.x = checked_range_cast<short>(fX);
 					sInventoryPos.y = checked_range_cast<short>(fY);
@@ -1844,8 +1836,8 @@ bool TakeFromInventory(const Vec2s & pos) {
 			slot.show = 1;
 			sInventory = 1;
 			
-			float fX = (pos.x - iPosX) / INTERFACE_RATIO(32);
-			float fY = (pos.y - iPosY) / INTERFACE_RATIO(32);
+			float fX = (pos.x - iPos.x) / INTERFACE_RATIO(32);
+			float fY = (pos.y - iPos.y) / INTERFACE_RATIO(32);
 			
 			sInventoryPos.x = checked_range_cast<short>(fX);
 			sInventoryPos.y = checked_range_cast<short>(fY);

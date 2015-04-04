@@ -192,18 +192,12 @@ long STOP_KEYBOARD_INPUT= 0;
 long BOOKBUTTON=0;
 long LASTBOOKBUTTON=0;
 bool EXTERNALVIEW = false;
-bool ARX_CONVERSATION = false;
-long ARX_CONVERSATION_MODE=-1;
-long ARX_CONVERSATION_LASTIS=-1;
-static bool LAST_CONVERSATION = 0;
 bool SHOW_INGAME_MINIMAP = true;
 
 bool ARX_FLARES_Block = true;
 
 Vec3f LASTCAMPOS;
 Anglef LASTCAMANGLE;
-Entity * CAMERACONTROLLER=NULL;
-Entity *lastCAMERACONTROLLER=NULL;
 
 // ArxGame constructor. Sets attributes for the app.
 ArxGame::ArxGame()
@@ -821,7 +815,6 @@ bool ArxGame::initGame()
 	CleanInventory();
 	
 	ARX_SPEECH_FirstInit();
-	ARX_CONVERSATION_FirstInit();
 	ARX_SPEECH_Init();
 	ARX_SPEECH_ClearAll();
 	RemoveQuakeFX();
@@ -1346,13 +1339,11 @@ void ArxGame::updateFirstPersonCamera() {
 		subj.d_angle = eyeball.angle;
 		EXTERNALVIEW = true;
 	} else if(EXTERNALVIEW) {
-		float t=glm::radians(player.angle.getPitch());
-
 		for(long l=0; l < 250; l += 10) {
 			Vec3f tt = player.pos;
-			tt.x += std::sin(t)*(float)l;
-			tt.y -= 50.f;
-			tt.z -= std::cos(t)*(float)l;
+			tt += angleToVectorXZ_180offset(player.angle.getPitch()) * float(l);
+			tt += Vec3f(0.f, -50.f, 0.f);
+			
 			EERIEPOLY * ep = CheckInPoly(tt);
 			if(ep) {
 				subj.d_pos = tt;
@@ -1391,100 +1382,6 @@ void ArxGame::updateFirstPersonCamera() {
 		subj.orgTrans.pos = (subj.orgTrans.pos + subj.d_pos) * 0.5f;
 		subj.angle = interpolate(subj.angle, subj.d_angle, 0.1f);
 	}
-}
-
-void ArxGame::updateConversationCamera() {
-
-	if(ARX_CONVERSATION && main_conversation.actors_nb) {
-		// Decides who speaks !!
-		if(main_conversation.current < 0)
-			for(long j=0; j < main_conversation.actors_nb; j++) {
-				if(main_conversation.actors[j] >= PlayerEntityHandle) {
-					for(size_t k = 0 ; k < MAX_ASPEECH; k++) {
-							if(aspeech[k].exist && aspeech[k].io == entities[main_conversation.actors[j]]) {
-								main_conversation.current = k;
-								j = main_conversation.actors_nb + 1;
-								k = MAX_ASPEECH+1;
-							}
-					}
-				}
-			}
-
-		long is = main_conversation.current;
-
-		if(ARX_CONVERSATION_LASTIS != is)
-			ARX_CONVERSATION_MODE = -1;
-
-		ARX_CONVERSATION_LASTIS = is;
-
-		if(ARX_CONVERSATION_MODE == -1) {
-			ARX_CONVERSATION_MODE = 0;
-			if(rnd() > 0.5f) {
-				conversationcamera.size = Anglef(MAKEANGLE(170.f + rnd() * 20.f), 0.f, 0.f);
-				conversationcamera.d_angle = Anglef(0.f, 0.f, 0.08f);
-			} else {
-				conversationcamera.size = Anglef(rnd() * 50.f, 0.f, rnd() * 50.f);
-				conversationcamera.d_angle = Anglef::ZERO;
-				if(rnd() > 0.4f) {
-					conversationcamera.d_angle.setYaw((1.f - rnd() * 2.f) * (1.f / 30));
-				}
-				if(rnd() > 0.4f) {
-					conversationcamera.d_angle.setPitch((1.f - rnd() * 1.2f) * 0.2f);
-				}
-				if(rnd() > 0.4f) {
-					conversationcamera.d_angle.setRoll((1.f - rnd() * 2.f) * 0.025f);
-				}
-			}
-		} else {
-			conversationcamera.size += conversationcamera.d_angle * framedelay;
-		}
-
-		Vec3f sourcepos,targetpos;
-
-		if(ApplySpeechPos(&conversationcamera, is)) {
-			targetpos = conversationcamera.d_pos;
-			sourcepos = conversationcamera.orgTrans.pos;
-		} else {
-			targetpos = player.pos;
-			float t = glm::radians(player.angle.getPitch());
-			sourcepos.x=targetpos.x+std::sin(t)*100.f;
-			sourcepos.y=targetpos.y;
-			sourcepos.z=targetpos.z-std::cos(t)*100.f;
-		}
-		
-		Vec3f vect = targetpos - sourcepos;
-		vect = glm::normalize(vect);
-
-		float dist = 250.f - conversationcamera.size.getRoll();
-		if(dist < 0.f)
-			dist = 90.f - dist * (1.f/20);
-		else if(dist < 90.f)
-			dist = 90.f;
-
-		Vec3f vec2 = VRotateY(vect, conversationcamera.size.getYaw());
-
-		sourcepos = targetpos - vec2 * dist;
-
-		if(conversationcamera.size.getPitch() != 0.f)
-			sourcepos.y += 120.f - conversationcamera.size.getPitch() * (1.f/10);
-
-		conversationcamera.orgTrans.pos = sourcepos;
-		conversationcamera.setTargetCamera(targetpos);
-		subj.orgTrans.pos = conversationcamera.orgTrans.pos;
-		subj.angle.setYaw(MAKEANGLE(-conversationcamera.angle.getYaw()));
-		subj.angle.setPitch(MAKEANGLE(conversationcamera.angle.getPitch() - 180.f));
-		subj.angle.setRoll(0.f);
-		EXTERNALVIEW = true;
-	} else {
-		ARX_CONVERSATION_MODE = -1;
-		ARX_CONVERSATION_LASTIS = -1;
-
-		if(LAST_CONVERSATION) {
-			changeAnimation(entities.player(), 1, entities.player()->anims[ANIM_WAIT], EA_LOOP);
-		}
-	}
-
-	LAST_CONVERSATION = ARX_CONVERSATION;
 }
 
 void ArxGame::speechControlledCinematic() {
@@ -1526,9 +1423,11 @@ void ArxGame::speechControlledCinematic() {
 				float beta = acs->startangle.getPitch() * itime + acs->endangle.getPitch() * rtime;
 				float distance = acs->startpos * itime + acs->endpos * rtime;
 				Vec3f targetpos = acs->pos1;
-				conversationcamera.orgTrans.pos.x=-std::sin(glm::radians(MAKEANGLE(io->angle.getPitch()+beta)))*distance+targetpos.x;
-				conversationcamera.orgTrans.pos.y= std::sin(glm::radians(MAKEANGLE(io->angle.getYaw()+alpha)))*distance+targetpos.y;
-				conversationcamera.orgTrans.pos.z= std::cos(glm::radians(MAKEANGLE(io->angle.getPitch()+beta)))*distance+targetpos.z;
+				
+				conversationcamera.orgTrans.pos = angleToVectorXZ(io->angle.getPitch() + beta) * distance;
+				conversationcamera.orgTrans.pos.y = std::sin(glm::radians(MAKEANGLE(io->angle.getYaw() + alpha))) * distance;
+				conversationcamera.orgTrans.pos += targetpos;
+
 				conversationcamera.setTargetCamera(targetpos);
 				subj.orgTrans.pos = conversationcamera.orgTrans.pos;
 				subj.angle.setYaw(MAKEANGLE(-conversationcamera.angle.getYaw()));
@@ -1552,18 +1451,15 @@ void ArxGame::speechControlledCinematic() {
 						vect2 = VRotateY(vect, 90.f);
 					}
 
-					float distance=acs->f0*itime+acs->f1*rtime;
+					float distance=acs->m_startdist*itime+acs->m_enddist*rtime;
 					vect2 *= distance;
 					float _dist = glm::distance(from, to);
 					Vec3f tfrom = from + vect * acs->startpos * (1.0f / 100) * _dist;
 					Vec3f tto = from + vect * acs->endpos * (1.0f / 100) * _dist;
-					Vec3f targetpos;
-					targetpos.x=tfrom.x*itime+tto.x*rtime;
-					targetpos.y=tfrom.y*itime+tto.y*rtime+acs->f2;
-					targetpos.z=tfrom.z*itime+tto.z*rtime;
-					conversationcamera.orgTrans.pos.x=targetpos.x+vect2.x;
-					conversationcamera.orgTrans.pos.y=targetpos.y+vect2.y+acs->f2;
-					conversationcamera.orgTrans.pos.z=targetpos.z+vect2.z;
+					
+					Vec3f targetpos = tfrom * itime + tto * rtime + Vec3f(0.f, acs->m_heightModifier, 0.f);
+
+					conversationcamera.orgTrans.pos = targetpos + vect2 + Vec3f(0.f, acs->m_heightModifier, 0.f);
 					conversationcamera.setTargetCamera(targetpos);
 					subj.orgTrans.pos = conversationcamera.orgTrans.pos;
 					subj.angle.setYaw(MAKEANGLE(-conversationcamera.angle.getYaw()));
@@ -1664,39 +1560,6 @@ void ArxGame::handlePlayerDeath() {
 		EXTERNALVIEW = true;
 		BLOCK_PLAYER_CONTROLS = true;
 	}
-}
-
-void ArxGame::handleCameraController() {
-
-	static float currentbeta = 0.f;
-
-	if(CAMERACONTROLLER) {
-		if(lastCAMERACONTROLLER != CAMERACONTROLLER)
-			currentbeta = CAMERACONTROLLER->angle.getPitch();
-
-		Vec3f targetpos = CAMERACONTROLLER->pos + player.baseOffset();
-
-		float delta_angle = AngleDifference(currentbeta, CAMERACONTROLLER->angle.getPitch());
-		float delta_angle_t = delta_angle * framedelay * ( 1.0f / 1000 );
-
-		if(glm::abs(delta_angle_t) > glm::abs(delta_angle))
-			delta_angle_t = delta_angle;
-
-		currentbeta += delta_angle_t;
-		float t=glm::radians(MAKEANGLE(currentbeta));
-		conversationcamera.orgTrans.pos.x=targetpos.x+std::sin(t)*160.f;
-		conversationcamera.orgTrans.pos.y=targetpos.y+40.f;
-		conversationcamera.orgTrans.pos.z=targetpos.z-std::cos(t)*160.f;
-
-		conversationcamera.setTargetCamera(targetpos);
-		subj.orgTrans.pos = conversationcamera.orgTrans.pos;
-		subj.angle.setYaw(MAKEANGLE(-conversationcamera.angle.getYaw()));
-		subj.angle.setPitch(MAKEANGLE(conversationcamera.angle.getPitch()-180.f));
-		subj.angle.setRoll(0.f);
-		EXTERNALVIEW = true;
-	}
-
-	lastCAMERACONTROLLER=CAMERACONTROLLER;
 }
 
 void ArxGame::updateActiveCamera() {
@@ -1831,10 +1694,6 @@ void ArxGame::updateInput() {
 	if(GInput->isKeyPressedNowPressed(Keyboard::Key_ScrollLock)) {
 		drawDebugCycleViews();
 	}
-
-	if(GInput->isKeyPressedNowPressed(Keyboard::Key_Spacebar)) {
-		CAMERACONTROLLER = NULL;
-	}
 }
 
 bool ArxGame::isInMenu() const {
@@ -1937,15 +1796,13 @@ void ArxGame::updateLevel() {
 	}
 
 	updateFirstPersonCamera();
-	updateConversationCamera();
-
+	
 	ARX_SCRIPT_Timer_Check();
 
 	speechControlledCinematic();
 
 	handlePlayerDeath();
-
-	handleCameraController();
+	
 	UpdateCameras();
 
 	ARX_PLAYER_FrameCheck(Original_framedelay);
@@ -1979,9 +1836,8 @@ void ArxGame::updateLevel() {
 
 	ARX_SCENE_Update();
 
-	if(pParticleManager) {
-		pParticleManager->Update(static_cast<long>(framedelay));
-	}
+	arx_assert(pParticleManager);
+	pParticleManager->Update(static_cast<long>(framedelay));
 
 	ARX_FOGS_Render();
 
@@ -1989,7 +1845,7 @@ void ArxGame::updateLevel() {
 
 	// Checks Magic Flares Drawing
 	if(!PLAYER_PARALYSED) {
-		if(EERIEMouseButton & 1) {
+		if(eeMousePressed1()) {
 			if(!ARX_FLARES_Block) {
 				ARX_SPELLS_AddPoint(DANAEMouse);
 			} else {
@@ -2053,10 +1909,8 @@ void ArxGame::renderLevel() {
 	drawDebugRender();
 
 	// Begin Particles
-		
-	if(pParticleManager) {
-		pParticleManager->Render();
-	}
+	arx_assert(pParticleManager);
+	pParticleManager->Render();
 	
 	ARX_PARTICLES_Update(&subj);
 	
@@ -2243,8 +2097,8 @@ void ArxGame::render() {
 			LASTBOOKBUTTON = BOOKBUTTON;
 			BOOKBUTTON = EERIEMouseButton;
 			
-			if(((EERIEMouseButton & 1) && !(LastMouseClick & 1))
-			   || ((EERIEMouseButton & 2) && !(LastMouseClick & 2))
+			if((eeMouseDown1())
+			   || (eeMouseDown2())
 			) {
 				bookclick = true;
 			}

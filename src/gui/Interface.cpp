@@ -57,6 +57,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <vector>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/foreach.hpp>
 
 #include "animation/Animation.h"
 #include "animation/AnimationRender.h"
@@ -128,8 +129,6 @@ extern float MagicSightFader;
 extern float Original_framedelay;
 extern EERIE_3DOBJ *arrowobj;
 
-long IN_BOOK_DRAW=0;
-
 extern EntityHandle LastSelectedIONum;
 
 //-----------------------------------------------------------------------------
@@ -141,20 +140,12 @@ struct ARX_INTERFACE_HALO_STRUCT
 	Vec2f m_pos;
 	Vec2f ratio;
 };
-//-----------------------------------------------------------------------------
-static const float BOOKMARKS_POS_X = 216.f;
-static const float BOOKMARKS_POS_Y = 60.f;
 
-//-----------------------------------------------------------------------------
-//-----------------------------------------------------------------------------
 extern TextureContainer * inventory_font;
-extern Notification speech[];
 
 extern float PLAYER_ROTATION;
 extern float SLID_VALUE;
 
-extern long BOOKBUTTON;
-extern long LASTBOOKBUTTON;
 long lSLID_VALUE = 0;
 
 extern bool BLOCK_PLAYER_CONTROLS;
@@ -168,7 +159,8 @@ extern bool SHOW_INGAME_MINIMAP;
 
 //-----------------------------------------------------------------------------
 
-ARX_INTERFACE_HALO_STRUCT * aiHalo=NULL;
+std::vector<ARX_INTERFACE_HALO_STRUCT> deferredUiHalos;
+
 E_ARX_STATE_MOUSE	eMouseState;
 bool bookclick;
 Vec2s MemoMouse;
@@ -180,13 +172,8 @@ Entity *	STARTED_ACTION_ON_IO=NULL;
 INTERFACE_TC ITC = INTERFACE_TC();
 
 gui::Note openNote;
-static gui::Note questBook;
-
-bool				bBookHalo = false;
 
 bool				bInventoryClosing = false;
-
-unsigned long		ulBookHaloTime = 0;
 
 float				InventoryDir=0; // 0 stable, 1 to right, -1 to left
 
@@ -200,26 +187,11 @@ bool				LAST_PLAYER_MOUSELOOK_ON = false;
 static bool MEMO_PLAYER_MOUSELOOK_ON = false;
 
 bool				COMBINEGOLD = false;
-ARX_INTERFACE_BOOK_MODE Book_Mode = BOOKMODE_STATS;
-long				Book_MapPage=1;
-long				Book_SpellPage=1;
-
-long				SMOOTHSLID=0;
 
 bool				DRAGGING = false;
 bool				PLAYER_INTERFACE_HIDE_COUNT = true;
 bool				MAGICMODE = false;
 long				SpecialCursor=0;
-long				FLYING_OVER		= 0;
-long				OLD_FLYING_OVER	= 0;
-long				LastRune=-1;
-long				BOOKZOOM=0;
-static long INTERFACE_HALO_NB = 0;
-static long INTERFACE_HALO_MAX_NB = 0;
-long				LastMouseClick=0;
-
-//used to redist points - attributes and skill
-long lCursorRedistValue = 0;
 
 unsigned long		COMBAT_MODE_ON_START_TIME = 0;
 static long SPECIAL_DRAW_WEAPON = 0;
@@ -255,90 +227,6 @@ Entity *pIOChangeWeapon=NULL;
 
 PlayerInterfaceFlags lOldInterface;
 
-namespace gui {
-
-namespace {
-
-/*!
- * Manage forward and backward buttons on notes and the quest book.
- * \return true if the note was clicked
- */
-bool manageNoteActions(Note & note) {
-	
-	if(note.prevPageButton().contains(Vec2f(DANAEMouse))) {
-		SpecialCursor = CURSOR_INTERACTION_ON;
-		if(!(EERIEMouseButton & 1) && (LastMouseClick & 1)) {
-			ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9f + 0.2f * rnd());
-			arx_assert(note.page() >= 2);
-			note.setPage(note.page() - 2);
-		}
-		
-	} else if(note.nextPageButton().contains(Vec2f(DANAEMouse))) {
-		SpecialCursor = CURSOR_INTERACTION_ON;
-		if(!(EERIEMouseButton & 1) && (LastMouseClick & 1)) {
-			ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9f + 0.2f * rnd());
-			note.setPage(note.page() + 2);
-		}
-		
-	} else if(note.area().contains(Vec2f(DANAEMouse))) {
-		if(((EERIEMouseButton & 1) && !(LastMouseClick & 1) && TRUE_PLAYER_MOUSELOOK_ON)
-		   || ((EERIEMouseButton & 2) && !(LastMouseClick & 2))) {
-			EERIEMouseButton &= ~2;
-			return true;
-		}
-	}
-	
-	return false;
-}
-
-
-//! Update and render the quest book.
-void manageQuestBook() {
-	
-	// Cache the questbook data
-	if(questBook.text().empty() && !PlayerQuest.empty()) {
-		std::string text;
-		for(size_t i = 0; i < PlayerQuest.size(); ++i) {
-			std::string quest = getLocalised(PlayerQuest[i].ident);
-			if(!quest.empty()) {
-				text += quest;
-				text += "\n\n";
-			}
-		}
-		questBook.setData(Note::QuestBook, text);
-		questBook.setPage(questBook.pageCount() - 1);
-	}
-	
-	manageNoteActions(questBook);
-	
-	questBook.render();
-}
-
-} // anonymous namespace
-
-void updateQuestBook() {
-	// Clear the quest book cache - it will be re-created when needed
-	questBook.clear();
-}
-
-} // namespace gui
-
-//-----------------------------------------------------------------------------
-
-static bool MouseInBookRect(const float x, const float y, const float cx, const float cy) {
-	return DANAEMouse.x >= (x + BOOKDEC.x) * g_sizeRatio.x
-		&& DANAEMouse.x <= (cx + BOOKDEC.x) * g_sizeRatio.x
-		&& DANAEMouse.y >= (y + BOOKDEC.y) * g_sizeRatio.y
-		&& DANAEMouse.y <= (cy + BOOKDEC.y) * g_sizeRatio.y;
-}
-
-bool ARX_INTERFACE_MouseInBook() {
-	if((player.Interface & INTER_MAP) && !(player.Interface & INTER_COMBATMODE)) {
-		return MouseInBookRect(99, 65, 599, 372);
-	} else {
-		return false;
-	}
-}
 
 void ARX_INTERFACE_DrawNumber(const Vec2f & pos, const long num, const int _iNb, const Color color) {
 	
@@ -426,26 +314,26 @@ void INTERFACE_TC::init() {
 	bookmark_map     = TextureContainer::LoadUI("graph/interface/book/bookmark_map");
 	bookmark_quest   = TextureContainer::LoadUI("graph/interface/book/bookmark_quest");
 	
-	accessible_1   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_1");
-	accessible_2   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_2");
-	accessible_3   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_3");
-	accessible_4   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_4");
-	accessible_5   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_5");
-	accessible_6   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_6");
-	accessible_7   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_7");
-	accessible_8   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_8");
-	accessible_9   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_9");
-	accessible_10  = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_10");
-	current_1   = TextureContainer::LoadUI("graph/interface/book/current_page/current_1");
-	current_2   = TextureContainer::LoadUI("graph/interface/book/current_page/current_2");
-	current_3   = TextureContainer::LoadUI("graph/interface/book/current_page/current_3");
-	current_4   = TextureContainer::LoadUI("graph/interface/book/current_page/current_4");
-	current_5   = TextureContainer::LoadUI("graph/interface/book/current_page/current_5");
-	current_6   = TextureContainer::LoadUI("graph/interface/book/current_page/current_6");
-	current_7   = TextureContainer::LoadUI("graph/interface/book/current_page/current_7");
-	current_8   = TextureContainer::LoadUI("graph/interface/book/current_page/current_8");
-	current_9   = TextureContainer::LoadUI("graph/interface/book/current_page/current_9");
-	current_10  = TextureContainer::LoadUI("graph/interface/book/current_page/current_10");
+	accessibleTab[0]   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_1");
+	accessibleTab[1]   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_2");
+	accessibleTab[2]   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_3");
+	accessibleTab[3]   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_4");
+	accessibleTab[4]   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_5");
+	accessibleTab[5]   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_6");
+	accessibleTab[6]   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_7");
+	accessibleTab[7]   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_8");
+	accessibleTab[8]   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_9");
+	accessibleTab[9]   = TextureContainer::LoadUI("graph/interface/book/accessible/accessible_10");
+	currentTab[0]   = TextureContainer::LoadUI("graph/interface/book/current_page/current_1");
+	currentTab[1]   = TextureContainer::LoadUI("graph/interface/book/current_page/current_2");
+	currentTab[2]   = TextureContainer::LoadUI("graph/interface/book/current_page/current_3");
+	currentTab[3]   = TextureContainer::LoadUI("graph/interface/book/current_page/current_4");
+	currentTab[4]   = TextureContainer::LoadUI("graph/interface/book/current_page/current_5");
+	currentTab[5]   = TextureContainer::LoadUI("graph/interface/book/current_page/current_6");
+	currentTab[6]   = TextureContainer::LoadUI("graph/interface/book/current_page/current_7");
+	currentTab[7]   = TextureContainer::LoadUI("graph/interface/book/current_page/current_8");
+	currentTab[8]   = TextureContainer::LoadUI("graph/interface/book/current_page/current_9");
+	currentTab[9]   = TextureContainer::LoadUI("graph/interface/book/current_page/current_10");
 	
 	
 	arx_assert(playerbook);
@@ -470,43 +358,31 @@ void INTERFACE_TC::init() {
 	arx_assert(bookmark_map);
 	arx_assert(bookmark_quest);
 	
-	arx_assert(accessible_1);
-	arx_assert(accessible_2);
-	arx_assert(accessible_3);
-	arx_assert(accessible_4);
-	arx_assert(accessible_5);
-	arx_assert(accessible_6);
-	arx_assert(accessible_7);
-	arx_assert(accessible_8);
-	arx_assert(accessible_9);
-	arx_assert(accessible_10);
-	arx_assert(current_1);
-	arx_assert(current_2);
-	arx_assert(current_3);
-	arx_assert(current_4);
-	arx_assert(current_5);
-	arx_assert(current_6);
-	arx_assert(current_7);
-	arx_assert(current_8);
-	arx_assert(current_9);
-	arx_assert(current_10);
+	arx_assert(accessibleTab[1]);
+	arx_assert(accessibleTab[1]);
+	arx_assert(accessibleTab[2]);
+	arx_assert(accessibleTab[3]);
+	arx_assert(accessibleTab[4]);
+	arx_assert(accessibleTab[5]);
+	arx_assert(accessibleTab[6]);
+	arx_assert(accessibleTab[7]);
+	arx_assert(accessibleTab[8]);
+	arx_assert(accessibleTab[9]);
+	arx_assert(currentTab[0]);
+	arx_assert(currentTab[1]);
+	arx_assert(currentTab[2]);
+	arx_assert(currentTab[3]);
+	arx_assert(currentTab[4]);
+	arx_assert(currentTab[5]);
+	arx_assert(currentTab[6]);
+	arx_assert(currentTab[7]);
+	arx_assert(currentTab[8]);
+	arx_assert(currentTab[9]);
 	
 	ITC.Level = getLocalised("system_charsheet_player_lvl");
 	ITC.Xp = getLocalised("system_charsheet_player_xp");
 }
 
-static void DrawBookInterfaceItem(TextureContainer * tc, Vec2f pos, Color color = Color::white, float z = 0.000001f) {
-	if(tc) {
-		EERIEDrawBitmap2(Rectf(
-			(pos + BOOKDEC) * g_sizeRatio,
-			tc->m_dwWidth * g_sizeRatio.x,
-			tc->m_dwHeight * g_sizeRatio.y),
-			z,
-			tc,
-			color
-		);
-	}
-}
 
 //-----------------------------------------------------------------------------
 void ARX_INTERFACE_HALO_Render(Color3f color,
@@ -541,36 +417,32 @@ void ARX_INTERFACE_HALO_Render(Color3f color,
 }
 
 void ARX_INTERFACE_HALO_Draw(Entity * io, TextureContainer * tc, TextureContainer * tc2, Vec2f pos, Vec2f ratio) {
-	INTERFACE_HALO_NB++;
 	
-	if(INTERFACE_HALO_NB > INTERFACE_HALO_MAX_NB) {
-		INTERFACE_HALO_MAX_NB = INTERFACE_HALO_NB;
-		aiHalo = (ARX_INTERFACE_HALO_STRUCT *)realloc(aiHalo,sizeof(ARX_INTERFACE_HALO_STRUCT)*INTERFACE_HALO_NB);
-	}
+	ARX_INTERFACE_HALO_STRUCT halo;
+	halo.io = io;
+	halo.tc = tc;
+	halo.tc2 = tc2;
+	halo.m_pos = pos;
+	halo.ratio = ratio;
 	
-	aiHalo[INTERFACE_HALO_NB-1].io=io;
-	aiHalo[INTERFACE_HALO_NB-1].tc=tc;
-	aiHalo[INTERFACE_HALO_NB-1].tc2=tc2;
-	aiHalo[INTERFACE_HALO_NB-1].m_pos.x=pos.x;
-	aiHalo[INTERFACE_HALO_NB-1].m_pos.y=pos.y;
-	aiHalo[INTERFACE_HALO_NB-1].ratio.x = ratio.x;
-	aiHalo[INTERFACE_HALO_NB-1].ratio.y = ratio.y;
+	deferredUiHalos.push_back(halo);
 }
 
 void ReleaseHalo() {
-	free(aiHalo);
-	aiHalo=NULL;
+	
+	deferredUiHalos.clear();
 }
 
 void ARX_INTERFACE_HALO_Flush() {
 	
-	for (long i=0;i<INTERFACE_HALO_NB;i++)
+	BOOST_FOREACH(ARX_INTERFACE_HALO_STRUCT & halo, deferredUiHalos) {
 		ARX_INTERFACE_HALO_Render(
-		aiHalo[i].io->halo.color,
-		aiHalo[i].io->halo.flags,
-		aiHalo[i].tc2, aiHalo[i].m_pos, aiHalo[i].ratio);
-
-	INTERFACE_HALO_NB=0;
+		halo.io->halo.color,
+		halo.io->halo.flags,
+		halo.tc2, halo.m_pos, halo.ratio);
+	}
+	
+	deferredUiHalos.clear();
 }
 
 //-----------------------------------------------------------------------------
@@ -635,7 +507,7 @@ void ARX_INTERFACE_NoteOpen(gui::Note::Type type, const std::string & text) {
 		ARX_INTERFACE_NoteClose();
 	}
 	
-	ARX_INTERFACE_BookOpenClose(2);
+	ARX_INTERFACE_BookClose();
 	
 	openNote.setData(type, getLocalised(text));
 	openNote.setPage(0);
@@ -703,106 +575,6 @@ void ARX_INTERFACE_NoteManage() {
 	openNote.render();
 }
 
-static void onBookClosePage() {
-	
-	if(Book_Mode == BOOKMODE_SPELLS) {
-		// Closing spell page - clean up any rune flares
-		ARX_SPELLS_ClearAllSymbolDraw();
-	}
-	
-}
-
-void ARX_INTERFACE_BookOpenClose(unsigned long t) // 0 switch 1 forceopen 2 forceclose
-{
-	if(t == 1 && (player.Interface & INTER_MAP))
-		return;
-
-	if(t == 2 && !(player.Interface & INTER_MAP))
-		return;
-
-
-	if(player.Interface & INTER_MAP) {
-		ARX_SOUND_PlayInterface(SND_BOOK_CLOSE, 0.9F + 0.2F * rnd());
-		SendIOScriptEvent(entities.player(),SM_BOOK_CLOSE);
-		player.Interface &=~ INTER_MAP;
-		g_miniMap.purgeTexContainer();
-
-		if(ARXmenu.mda) {
-			for(long i = 0; i < MAX_FLYOVER; i++) {
-				ARXmenu.mda->flyover[i].clear();
-			}
-			free(ARXmenu.mda);
-			ARXmenu.mda=NULL;
-		}
-		
-		onBookClosePage();
-	} else {
-		SendIOScriptEvent(entities.player(),SM_NULL,"","book_open");
-
-		ARX_SOUND_PlayInterface(SND_BOOK_OPEN, 0.9F + 0.2F * rnd());
-		SendIOScriptEvent(entities.player(),SM_BOOK_OPEN);
-		ARX_INTERFACE_NoteClose();
-		player.Interface |= INTER_MAP;
-		Book_MapPage=ARX_LEVELS_GetRealNum(CURRENTLEVEL)+1;
-
-		if(Book_MapPage > 8)
-			Book_MapPage = 8;
-
-		if(Book_MapPage < 1)
-			Book_MapPage = 1;
-
-		if(!ARXmenu.mda) {
-//			ARXmenu.mda = (MENU_DYNAMIC_DATA *)malloc(sizeof(MENU_DYNAMIC_DATA));
-//			memset(ARXmenu.mda,0,sizeof(MENU_DYNAMIC_DATA));
-			ARXmenu.mda = new MENU_DYNAMIC_DATA();
-			
-			ARXmenu.mda->flyover[BOOK_STRENGTH] = getLocalised("system_charsheet_strength");
-			ARXmenu.mda->flyover[BOOK_MIND] = getLocalised("system_charsheet_intel");
-			ARXmenu.mda->flyover[BOOK_DEXTERITY] = getLocalised("system_charsheet_dex");
-			ARXmenu.mda->flyover[BOOK_CONSTITUTION] = getLocalised("system_charsheet_consti");
-			ARXmenu.mda->flyover[BOOK_STEALTH] = getLocalised("system_charsheet_stealth");
-			ARXmenu.mda->flyover[BOOK_MECANISM] = getLocalised("system_charsheet_mecanism");
-			ARXmenu.mda->flyover[BOOK_INTUITION] = getLocalised("system_charsheet_intuition");
-			ARXmenu.mda->flyover[BOOK_ETHERAL_LINK] = getLocalised("system_charsheet_etheral_link");
-			ARXmenu.mda->flyover[BOOK_OBJECT_KNOWLEDGE] = getLocalised("system_charsheet_objknoledge");
-			ARXmenu.mda->flyover[BOOK_CASTING] = getLocalised("system_charsheet_casting");
-			ARXmenu.mda->flyover[BOOK_PROJECTILE] = getLocalised("system_charsheet_projectile");
-			ARXmenu.mda->flyover[BOOK_CLOSE_COMBAT] = getLocalised("system_charsheet_closecombat");
-			ARXmenu.mda->flyover[BOOK_DEFENSE] = getLocalised("system_charsheet_defense");
-			ARXmenu.mda->flyover[BUTTON_QUICK_GENERATION] = getLocalised("system_charsheet_quickgenerate");
-			ARXmenu.mda->flyover[BUTTON_DONE] = getLocalised("system_charsheet_done");
-			ARXmenu.mda->flyover[BUTTON_SKIN] = getLocalised("system_charsheet_skin");
-			ARXmenu.mda->flyover[WND_ATTRIBUTES] = getLocalised("system_charsheet_atributes");
-			ARXmenu.mda->flyover[WND_SKILLS] = getLocalised("system_charsheet_skills");
-			ARXmenu.mda->flyover[WND_STATUS] = getLocalised("system_charsheet_status");
-			ARXmenu.mda->flyover[WND_LEVEL] = getLocalised("system_charsheet_level");
-			ARXmenu.mda->flyover[WND_XP] = getLocalised("system_charsheet_xpoints");
-			ARXmenu.mda->flyover[WND_HP] = getLocalised("system_charsheet_hp");
-			ARXmenu.mda->flyover[WND_MANA] = getLocalised("system_charsheet_mana");
-			ARXmenu.mda->flyover[WND_AC] = getLocalised("system_charsheet_ac");
-			ARXmenu.mda->flyover[WND_RESIST_MAGIC] = getLocalised("system_charsheet_res_magic");
-			ARXmenu.mda->flyover[WND_RESIST_POISON] = getLocalised("system_charsheet_res_poison");
-			ARXmenu.mda->flyover[WND_DAMAGE] = getLocalised("system_charsheet_damage");
-		}
-	}
-
-	if(player.Interface & INTER_COMBATMODE) {
-		player.Interface&=~INTER_COMBATMODE;
-		ARX_EQUIPMENT_LaunchPlayerUnReadyWeapon();
-	}
-
-	if(player.Interface & INTER_INVENTORYALL) {
-		ARX_SOUND_PlayInterface(SND_BACKPACK, 0.9F + 0.2F * rnd());
-		bInventoryClosing = true;
-	}
-
-	BOOKZOOM = 0;
-	bBookHalo = false;
-	ulBookHaloTime = 0;
-	pTextManage->Clear();
-
-	TRUE_PLAYER_MOUSELOOK_ON = false;
-}
 
 //-------------------------------------------------------------------------------------
 // Keyboard/Mouse Management
@@ -810,7 +582,7 @@ void ARX_INTERFACE_BookOpenClose(unsigned long t) // 0 switch 1 forceopen 2 forc
 
 void ResetPlayerInterface() {
 	player.Interface |= INTER_LIFE_MANA;
-	SLID_VALUE = 0;
+	playerInterfaceFaderResetSlid();
 	lSLID_VALUE = 0;
 	SLID_START=float(arxtime);
 }
@@ -1147,7 +919,7 @@ void ARX_INTERFACE_Combat_Mode(long i) {
 	} else if(   !entities.player()->animlayer[1].cur_anim
 	           || entities.player()->animlayer[1].cur_anim == entities.player()->anims[ANIM_WAIT]
 	) {
-		ARX_INTERFACE_BookOpenClose(2);
+		ARX_INTERFACE_BookClose();
 
 		player.Interface|=INTER_COMBATMODE;
 
@@ -1167,83 +939,6 @@ void ARX_INTERFACE_Combat_Mode(long i) {
 long CSEND=0;
 long MOVE_PRECEDENCE=0;
 
-static bool canOpenBookPage(ARX_INTERFACE_BOOK_MODE page) {
-	switch(page) {
-		case BOOKMODE_SPELLS:  return !!player.rune_flags;
-		default:               return true;
-	}
-}
-
-static void openBookPage(ARX_INTERFACE_BOOK_MODE newPage, bool toggle = false) {
-	
-	if((player.Interface & INTER_MAP) && Book_Mode == newPage) {
-		
-		if(toggle) {
-			// Close the book
-			ARX_INTERFACE_BookOpenClose(2);
-		}
-		
-		return; // nothing to do
-	}
-	
-	if(!canOpenBookPage(newPage)) {
-		return;
-	}
-	
-	if(player.Interface & INTER_MAP) {
-		
-		onBookClosePage();
-		
-		// If the book is already open, play the page turn sound
-		ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-		
-	} else {
-		// Otherwise open the book
-		ARX_INTERFACE_BookOpenClose(0);
-	}
-	
-	Book_Mode = newPage;
-}
-
-static ARX_INTERFACE_BOOK_MODE nextBookPage() {
-	ARX_INTERFACE_BOOK_MODE nextPage = Book_Mode, oldPage;
-	do {
-		oldPage = nextPage;
-		
-		switch(oldPage) {
-			case BOOKMODE_STATS:   nextPage = BOOKMODE_SPELLS;  break;
-			case BOOKMODE_SPELLS:  nextPage = BOOKMODE_MINIMAP; break;
-			case BOOKMODE_MINIMAP: nextPage = BOOKMODE_QUESTS;  break;
-			case BOOKMODE_QUESTS:  nextPage = BOOKMODE_QUESTS;  break;
-		}
-		
-		if(canOpenBookPage(nextPage)) {
-			return nextPage;
-		}
-		
-	} while(nextPage != oldPage);
-	return Book_Mode;
-}
-
-static ARX_INTERFACE_BOOK_MODE prevBookPage() {
-	ARX_INTERFACE_BOOK_MODE prevPage = Book_Mode, oldPage;
-	do {
-		oldPage = prevPage;
-		
-		switch(oldPage) {
-			case BOOKMODE_STATS:   prevPage = BOOKMODE_STATS;   break;
-			case BOOKMODE_SPELLS:  prevPage = BOOKMODE_STATS;   break;
-			case BOOKMODE_MINIMAP: prevPage = BOOKMODE_SPELLS;  break;
-			case BOOKMODE_QUESTS:  prevPage = BOOKMODE_MINIMAP; break;
-		}
-		
-		if(canOpenBookPage(prevPage)) {
-			return prevPage;
-		}
-		
-	} while(prevPage != oldPage);
-	return Book_Mode;
-}
 
 extern unsigned long REQUEST_JUMP;
 //-----------------------------------------------------------------------------
@@ -1337,17 +1032,13 @@ void ArxGame::managePlayerControls() {
 
 			// Checks WALK_FORWARD Key Status.
 			if(GInput->actionPressed(CONTROLS_CUST_WALKFORWARD)) {
-				float tr = glm::radians(eyeball.angle.getPitch());
-				eyeball.pos.x += -std::sin(tr) * 20.f * FD * 0.033f;
-				eyeball.pos.z += +std::cos(tr) * 20.f * FD * 0.033f;
+				eyeball.pos += angleToVectorXZ(eyeball.angle.getPitch()) * 20.f * FD * 0.033f;
 				NOMOREMOVES=1;
 			}
 
 			// Checks WALK_BACKWARD Key Status.
 			if(GInput->actionPressed(CONTROLS_CUST_WALKBACKWARD)) {
-				float tr = glm::radians(eyeball.angle.getPitch());
-				eyeball.pos.x +=  std::sin(tr) * 20.f * FD * 0.033f;
-				eyeball.pos.z += -std::cos(tr) * 20.f * FD * 0.033f;
+				eyeball.pos += angleToVectorXZ_180offset(eyeball.angle.getPitch()) * 20.f * FD * 0.033f;
 				NOMOREMOVES=1;
 			}
 
@@ -1356,9 +1047,7 @@ void ArxGame::managePlayerControls() {
 				(GInput->actionPressed(CONTROLS_CUST_STRAFE)&&GInput->actionPressed(CONTROLS_CUST_TURNLEFT)))
 				&& !NOMOREMOVES)
 			{
-				float tr = glm::radians(MAKEANGLE(eyeball.angle.getPitch()+90.f));
-				eyeball.pos.x += -std::sin(tr) * 10.f * FD * 0.033f;
-				eyeball.pos.z += +std::cos(tr) * 10.f * FD * 0.033f;
+				eyeball.pos += angleToVectorXZ(eyeball.angle.getPitch() + 90.f) * 10.f * FD * 0.033f;
 				NOMOREMOVES=1;			
 			}
 
@@ -1367,10 +1056,8 @@ void ArxGame::managePlayerControls() {
 				(GInput->actionPressed(CONTROLS_CUST_STRAFE)&&GInput->actionPressed(CONTROLS_CUST_TURNRIGHT)))
 				&& !NOMOREMOVES)
 			{
-				float tr = glm::radians(MAKEANGLE(eyeball.angle.getPitch()-90.f));
-				eyeball.pos.x += -std::sin(tr) * 10.f * FD * 0.033f;
+				eyeball.pos += angleToVectorXZ(eyeball.angle.getPitch() - 90.f) * 10.f * FD * 0.033f;
 				//eyeball.pos.y+=FD*0.33f;
-				eyeball.pos.z +=  std::cos(tr) * 10.f * FD * 0.033f;
 				NOMOREMOVES=1;
 			}
 
@@ -1427,15 +1114,13 @@ void ArxGame::managePlayerControls() {
 			if(left || right) {
 				multi = 0.8f;
 			}
-
-			float t = glm::radians(player.angle.getPitch());
+			
 			multi = 5.f * FD * MoveDiv * multi;
-			tm.x += std::sin(t) * multi;
-			tm.z -= std::cos(t) * multi;
+			tm += angleToVectorXZ_180offset(player.angle.getPitch()) * multi;
 
 			if(!USE_PLAYERCOLLISIONS) {
-				t = glm::radians(player.angle.getYaw());
-				tm.y-=std::sin(t)*multi;
+				float t = glm::radians(player.angle.getYaw());
+				tm.y -= std::sin(t) * multi;
 			}
 
 			player.Current_Movement|=PLAYER_MOVE_WALK_BACKWARD;
@@ -1454,15 +1139,13 @@ void ArxGame::managePlayerControls() {
 			if(left || right) {
 				multi=0.8f;
 			}
-
-			float t = glm::radians(player.angle.getPitch());
+			
 			multi = 10.f * FD * MoveDiv * multi;
-			tm.x -= std::sin(t) * multi;
-			tm.z += std::cos(t) * multi;
+			tm += angleToVectorXZ(player.angle.getPitch()) * multi;
 
 			if(!USE_PLAYERCOLLISIONS) {
-				t = glm::radians(player.angle.getYaw());
-				tm.y+=std::sin(t)*multi;
+				float t = glm::radians(player.angle.getYaw());
+				tm.y += std::sin(t) * multi;
 			}
 
 			player.Current_Movement|=PLAYER_MOVE_WALK_FORWARD;
@@ -1476,11 +1159,9 @@ void ArxGame::managePlayerControls() {
 		// Checks STRAFE_LEFT Key Status.
 		if(left && !NOMOREMOVES) {
 			CurrFightPos=0;
-			float t = glm::radians(MAKEANGLE(player.angle.getPitch()+90.f));
 			float multi = 6.f * FD * MoveDiv;
-			tm.x -= std::sin(t) * multi;
-			tm.z += std::cos(t) * multi;
-
+			tm += angleToVectorXZ(player.angle.getPitch() + 90.f) * multi;
+			
 			player.Current_Movement|=PLAYER_MOVE_STRAFE_LEFT;
 
 			if (GInput->actionNowPressed(CONTROLS_CUST_STRAFELEFT) )
@@ -1492,11 +1173,9 @@ void ArxGame::managePlayerControls() {
 		// Checks STRAFE_RIGHT Key Status.
 		if(right && !NOMOREMOVES) {
 			CurrFightPos=1;
-			float t = glm::radians(MAKEANGLE(player.angle.getPitch()-90.f));
 			float multi = 6.f * FD * MoveDiv;
-			tm.x -= std::sin(t) * multi;
-			tm.z += std::cos(t) * multi;
-
+			tm += angleToVectorXZ(player.angle.getPitch() - 90.f) * multi;
+			
 			player.Current_Movement|=PLAYER_MOVE_STRAFE_RIGHT;
 
 			if(GInput->actionNowPressed(CONTROLS_CUST_STRAFERIGHT))
@@ -1740,6 +1419,7 @@ void ArxGame::managePlayerControls() {
 			} else {
 				if(GInput->actionNowPressed(CONTROLS_CUST_FREELOOK)) {
 					if(!TRUE_PLAYER_MOUSELOOK_ON) {
+						ARX_INTERFACE_BookClose();
 						TRUE_PLAYER_MOUSELOOK_ON = true;
 						SLID_START=float(arxtime);
 					} else {
@@ -1773,10 +1453,10 @@ void ArxGame::managePlayerControls() {
 
 	// Checks BOOK Key Status.
 	if(GInput->actionNowPressed(CONTROLS_CUST_BOOK))
-		ARX_INTERFACE_BookOpenClose(0);
+		ARX_INTERFACE_BookToggle();
 
 	// Check For Combat Mode ON/OFF
-	if(   (EERIEMouseButton & 1)
+	if(   eeMousePressed1()
 	   && !(player.Interface & INTER_COMBATMODE)
 	   && !g_cursorOverBook
 	   && !SpecialCursor
@@ -1833,20 +1513,7 @@ void ArxGame::managePlayerControls() {
 				InventoryOpenClose(2);
 
 				if(player.Interface &INTER_INVENTORY) {
-					Entity * io = NULL;
-
-					if(SecondaryInventory) {
-						io = SecondaryInventory->io;
-					} else if (player.Interface & INTER_STEAL) {
-						io = ioSteal;
-					}
-
-					if(io) {
-						InventoryDir=-1;
-						SendIOScriptEvent(io,SM_INVENTORY2_CLOSE);
-						TSecondaryInventory=SecondaryInventory;
-						SecondaryInventory=NULL;
-					}
+					gui::CloseSecondaryInventory();
 				}
 
 				if(config.input.mouseLookToggle) {
@@ -1863,20 +1530,7 @@ void ArxGame::managePlayerControls() {
 				InventoryOpenClose(2);
 
 				if(player.Interface &INTER_INVENTORY) {
-					Entity * io = NULL;
-
-					if (SecondaryInventory) {
-						io = SecondaryInventory->io;
-					} else if (player.Interface & INTER_STEAL) {
-						io = ioSteal;
-					}
-
-					if(io){
-						InventoryDir=-1;
-						SendIOScriptEvent(io,SM_INVENTORY2_CLOSE);
-						TSecondaryInventory=SecondaryInventory;
-						SecondaryInventory=NULL;
-					}
+					gui::CloseSecondaryInventory();
 				}
 
 				if(config.input.mouseLookToggle) {
@@ -1912,16 +1566,29 @@ void ArxGame::managePlayerControls() {
 }
 
 class PlayerInterfaceFader {
+private:
+	long SMOOTHSLID;
+	float SLID_VALUE;
+	
 public:
+	PlayerInterfaceFader()
+		: SMOOTHSLID(0)
+		, SLID_VALUE(0.f)
+	{}
+	
 	void reset() {
 		SMOOTHSLID=0;
 		PLAYER_INTERFACE_HIDE_COUNT = true;
 	}
 	
+	void resetSlid() {
+		SLID_VALUE = 0.f;
+	}
+	
 	void requestFade(FadeDirection showhide, long smooth) {
 		if(showhide == FadeDirection_Out) {
 			InventoryOpenClose(2);
-			ARX_INTERFACE_BookOpenClose(2);
+			ARX_INTERFACE_BookClose();
 			ARX_INTERFACE_NoteClose();
 		}
 		
@@ -2007,12 +1674,15 @@ void playerInterfaceFaderRequestFade(FadeDirection showhide, long smooth) {
 	playerInterfaceFader.requestFade(showhide, smooth);
 }
 
+void playerInterfaceFaderResetSlid() {
+	playerInterfaceFader.resetSlid();
+}
 
 void ARX_INTERFACE_Reset()
 {
 	playerInterfaceFader.reset();
+	playerInterfaceFader.resetSlid();
 	BLOCK_PLAYER_CONTROLS = false;
-	SLID_VALUE=0;
 	cinematicBorder.reset2();
 	cinematicBorder.reset();
 	CINEMA_DECAL=0;
@@ -2067,8 +1737,7 @@ void ArxGame::manageKeyMouse() {
 		   && !g_cursorOverBook
 		   && eMouseState != MOUSE_IN_NOTE
 		) {
-			if(!(EERIEMouseButton & 2)
-			   && (LastMouseClick & 2)
+			if(   eeMouseUp2()
 			   && STARTED_ACTION_ON_IO == pIO
 			) {
 				if(pIO->ioflags & IO_ITEM) {
@@ -2131,7 +1800,7 @@ void ArxGame::manageKeyMouse() {
 					}
 				}
 			} else { //!TRUE_PLAYER_MOUSELOOK_ON
-				if((EERIEMouseButton & 2) && !(LastMouseClick & 2)) {
+				if(eeMouseDown2()) {
 					STARTED_ACTION_ON_IO = FlyingOverIO;
 				}
 			}
@@ -2362,7 +2031,7 @@ void ArxGame::manageKeyMouse() {
 
 	if((!BLOCK_PLAYER_CONTROLS) && !(player.Interface & INTER_COMBATMODE)) {
 		if(!DRAGINTER) {
-			if(config.input.autoDescription || ((LastMouseClick & 1) && !(EERIEMouseButton & 1) && !(EERIEMouseButton & 4) && !(LastMouseClick & 4)))
+			if(config.input.autoDescription || (eeMouseUp1() && !(EERIEMouseButton & 4) && !(LastMouseClick & 4)))
 			{
 				Entity * temp;
 				temp = FlyingOverIO;
@@ -2436,1630 +2105,6 @@ void ArxGame::manageKeyMouse() {
 		}
 }
 
-static void ARX_INTERFACE_RELEASESOUND() {
-	ARX_SOUND_PlayInterface(SND_MENU_RELEASE);
-}
-
-static void ARX_INTERFACE_ERRORSOUND() {
-	ARX_SOUND_PlayInterface(SND_MENU_CLICK);
-}
-
-static bool CheckAttributeClick(float x, float y, float * val, TextureContainer * tc) {
-	
-	bool rval=false;
-	float t = *val;
-
-	if(MouseInBookRect(x, y, x + 32, y + 32)) {
-		rval = true;
-
-		if(((BOOKBUTTON & 1) || (BOOKBUTTON & 2)) && tc)
-			DrawBookInterfaceItem(tc, Vec2f(x, y));
-
-		if(!(BOOKBUTTON & 1) && (LASTBOOKBUTTON & 1)) {
-			if(player.Attribute_Redistribute > 0) {
-				player.Attribute_Redistribute--;
-				t++;
-				*val=t;
-				ARX_INTERFACE_RELEASESOUND();
-			}
-			else
-				ARX_INTERFACE_ERRORSOUND();
-		}
-
-		if(!(BOOKBUTTON & 2) && (LASTBOOKBUTTON & 2)) {
-			if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-				if(t > 6 && player.level == 0) {
-					player.Attribute_Redistribute++;
-					t --;
-					*val=t;
-					ARX_INTERFACE_RELEASESOUND();
-				}
-				else
-					ARX_INTERFACE_ERRORSOUND();
-			}
-			else
-				ARX_INTERFACE_ERRORSOUND();
-		}
-	}
-
-	return rval;
-}
-
-static bool CheckSkillClick(float x, float y, float * val, TextureContainer * tc,
-                            float * oldval) {
-	
-	bool rval=false;
-
-	float t = *val;
-	float ot = *oldval;
-
-	if(MouseInBookRect( x, y, x + 32, y + 32)) {
-		rval=true;
-
-		if(((BOOKBUTTON & 1) || (BOOKBUTTON & 2)) && tc)
-			DrawBookInterfaceItem(tc, Vec2f(x, y));
-
-		if(!(BOOKBUTTON & 1) && (LASTBOOKBUTTON & 1)) {
-			if(player.Skill_Redistribute > 0) {
-				player.Skill_Redistribute--;
-				t++;
-				*val=t;
-				ARX_INTERFACE_RELEASESOUND();
-			}
-			else
-				ARX_INTERFACE_ERRORSOUND();
-		}
-
-		if(!(BOOKBUTTON & 2) && (LASTBOOKBUTTON & 2)) {
-			if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-				if(t > ot && player.level == 0) {
-					player.Skill_Redistribute++;
-					t --;
-					*val=t;
-					ARX_INTERFACE_RELEASESOUND();
-				}
-				else
-					ARX_INTERFACE_ERRORSOUND();
-			}
-			else
-				ARX_INTERFACE_ERRORSOUND();
-		}
-	}
-
-	return rval;
-}
-
-void ARX_INTERFACE_ManageOpenedBook_Finish()
-{
-	GRenderer->SetRenderState(Renderer::DepthWrite, true);
-
-	if((player.Interface & INTER_MAP) && !(player.Interface & INTER_COMBATMODE)) {
-		if(Book_Mode == BOOKMODE_SPELLS) {
-
-			Vec3f pos = Vec3f(0.f, 0.f, 2100.f);
-			Anglef angle = Anglef::ZERO;
-
-			EERIE_LIGHT * light = lightHandleGet(torchLightHandle);
-			
-			EERIE_LIGHT tl = *light;
-
-			light->pos = Vec3f(500.f, -1960.f, 1590.f);
-			light->exist = 1;
-			light->rgb = Color3f(0.6f, 0.7f, 0.9f);
-			light->intensity  = 1.8f;
-			light->fallstart=4520.f;
-			light->fallend = light->fallstart + 600.f;
-			RecalcLight(light);
-			
-			EERIE_CAMERA * oldcam = ACTIVECAM;
-			
-			PDL[0] = light;
-			TOTPDL=1;
-
-			long found2=0;
-			float n;
-			long xpos=0;
-			long ypos=0;
-
-			for(size_t i = 0; i < RUNE_COUNT; i++) {
-				if(gui::necklace.runes[i]) {
-					bookcam.center.x = (382 + xpos * 45 + BOOKDEC.x) * g_sizeRatio.x;
-					bookcam.center.y = (100 + ypos * 64 + BOOKDEC.y) * g_sizeRatio.y;
-
-					SetActiveCamera(&bookcam);
-					PrepareCamera(&bookcam, g_size);
-
-					// First draw the lace
-					angle.setPitch(0.f);
-
-					if(player.rune_flags & (RuneFlag)(1<<i)) {
-						
-						TransformInfo t1(pos, glm::toQuat(toRotationMatrix(angle)));
-						DrawEERIEInter(gui::necklace.lacet, t1, NULL);
-
-						if(gui::necklace.runes[i]->angle.getPitch() != 0.f) {
-							if(gui::necklace.runes[i]->angle.getPitch() > 300.f)
-								gui::necklace.runes[i]->angle.setPitch(300.f);
-
-							angle.setPitch(std::sin(arxtime.get_updated() * (1.0f / 200)) * gui::necklace.runes[i]->angle.getPitch() * (1.0f / 40));
-						}
-
-						gui::necklace.runes[i]->angle.setPitch(gui::necklace.runes[i]->angle.getPitch() - framedelay * 0.2f);
-
-						if(gui::necklace.runes[i]->angle.getPitch() < 0.f)
-							gui::necklace.runes[i]->angle.setPitch(0.f);
-
-						GRenderer->SetRenderState(Renderer::DepthWrite, true);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						
-						// Now draw the rune
-						TransformInfo t2(pos, glm::toQuat(toRotationMatrix(angle)));
-						DrawEERIEInter(gui::necklace.runes[i], t2, NULL);
-
-						EERIE_2D_BBOX runeBox;
-						UpdateBbox2d(*gui::necklace.runes[i], runeBox);
-
-						PopAllTriangleList();
-
-						xpos++;
-
-						if(xpos > 4) {
-							xpos = 0;
-							ypos++;
-						}
-						
-						const Rect runeMouseTestRect(
-						runeBox.min.x,
-						runeBox.min.y,
-						runeBox.max.x,
-						runeBox.max.y
-						);
-
-						// Checks for Mouse floating over a rune...
-						if(!found2 && runeMouseTestRect.contains(Vec2i(DANAEMouse))) {
-							long r=0;
-
-							for(size_t j = 0; j < gui::necklace.runes[i]->facelist.size(); j++) {
-								n=PtIn2DPolyProj(gui::necklace.runes[i], &gui::necklace.runes[i]->facelist[j], (float)DANAEMouse.x, (float)DANAEMouse.y);
-
-								if(n!=0.f) {
-									r=1;
-									break;
-								}
-							}
-
-							if(r) {
-								GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-								GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-								
-								TransformInfo t(pos, glm::toQuat(toRotationMatrix(angle)));
-								DrawEERIEInter(gui::necklace.runes[i], t, NULL);
-
-								gui::necklace.runes[i]->angle.setPitch(gui::necklace.runes[i]->angle.getPitch() + framedelay*2.f);
-
-								PopAllTriangleList();
-								
-								GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-
-								SpecialCursor=CURSOR_INTERACTION_ON;
-
-								if((EERIEMouseButton & 1) && !(LastMouseClick & 1))
-									if((size_t)LastRune != i) {
-										switch(i)
-										{
-										case RUNE_AAM:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "aam", ARX_SOUND_GetDuration(SND_SYMB_AAM));
-											ARX_SOUND_PlayInterface(SND_SYMB_AAM);
-											break;
-										case RUNE_CETRIUS:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "cetrius", ARX_SOUND_GetDuration(SND_SYMB_CETRIUS));
-											ARX_SOUND_PlayInterface(SND_SYMB_CETRIUS);
-											break;
-										case RUNE_COMUNICATUM:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "comunicatum", ARX_SOUND_GetDuration(SND_SYMB_COMUNICATUM));
-											ARX_SOUND_PlayInterface(SND_SYMB_COMUNICATUM);
-											break;
-										case RUNE_COSUM:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "cosum", ARX_SOUND_GetDuration(SND_SYMB_COSUM));
-											ARX_SOUND_PlayInterface(SND_SYMB_COSUM);
-											break;
-										case RUNE_FOLGORA:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "folgora", ARX_SOUND_GetDuration(SND_SYMB_FOLGORA));
-											ARX_SOUND_PlayInterface(SND_SYMB_FOLGORA);
-											break;
-										case RUNE_FRIDD:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "fridd", ARX_SOUND_GetDuration(SND_SYMB_FRIDD));
-											ARX_SOUND_PlayInterface(SND_SYMB_FRIDD);
-											break;
-										case RUNE_KAOM:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "kaom", ARX_SOUND_GetDuration(SND_SYMB_KAOM));
-											ARX_SOUND_PlayInterface(SND_SYMB_KAOM);
-											break;
-										case RUNE_MEGA:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "mega", ARX_SOUND_GetDuration(SND_SYMB_MEGA));
-											ARX_SOUND_PlayInterface(SND_SYMB_MEGA);
-											break;
-										case RUNE_MORTE:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "morte", ARX_SOUND_GetDuration(SND_SYMB_MORTE));
-											ARX_SOUND_PlayInterface(SND_SYMB_MORTE);
-											break;
-										case RUNE_MOVIS:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "movis", ARX_SOUND_GetDuration(SND_SYMB_MOVIS));
-											ARX_SOUND_PlayInterface(SND_SYMB_MOVIS);
-											break;
-										case RUNE_NHI:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "nhi", ARX_SOUND_GetDuration(SND_SYMB_NHI));
-											ARX_SOUND_PlayInterface(SND_SYMB_NHI);
-											break;
-										case RUNE_RHAA:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "rhaa", ARX_SOUND_GetDuration(SND_SYMB_RHAA));
-											ARX_SOUND_PlayInterface(SND_SYMB_RHAA);
-											break;
-										case RUNE_SPACIUM:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "spacium", ARX_SOUND_GetDuration(SND_SYMB_SPACIUM));
-											ARX_SOUND_PlayInterface(SND_SYMB_SPACIUM);
-											break;
-										case RUNE_STREGUM:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "stregum", ARX_SOUND_GetDuration(SND_SYMB_STREGUM));
-											ARX_SOUND_PlayInterface(SND_SYMB_STREGUM);
-											break;
-										case RUNE_TAAR:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "taar", ARX_SOUND_GetDuration(SND_SYMB_TAAR));
-											ARX_SOUND_PlayInterface(SND_SYMB_TAAR);
-											break;
-										case RUNE_TEMPUS:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "tempus", ARX_SOUND_GetDuration(SND_SYMB_TEMPUS));
-											ARX_SOUND_PlayInterface(SND_SYMB_TEMPUS);
-											break;
-										case RUNE_TERA:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "tera", ARX_SOUND_GetDuration(SND_SYMB_TERA));
-											ARX_SOUND_PlayInterface(SND_SYMB_TERA);
-											break;
-										case RUNE_VISTA:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "vista", ARX_SOUND_GetDuration(SND_SYMB_VISTA));
-											ARX_SOUND_PlayInterface(SND_SYMB_VISTA);
-											break;
-										case RUNE_VITAE:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "vitae", ARX_SOUND_GetDuration(SND_SYMB_VITAE));
-											ARX_SOUND_PlayInterface(SND_SYMB_VITAE);
-											break;
-										case RUNE_YOK:
-											ARX_SPELLS_RequestSymbolDraw(entities.player(), "yok", ARX_SOUND_GetDuration(SND_SYMB_YOK));
-											ARX_SOUND_PlayInterface(SND_SYMB_YOK);
-											break;
-										}
-									}
-
-									LastRune=i;
-							}
-						}
-					}
-				}
-			}
-
-			GRenderer->SetCulling(Renderer::CullCCW);
-
-			if(!found2)
-				LastRune=-1;
-
-			// Now Draws Spells for this level...
-			ARX_PLAYER_ComputePlayerFullStats();
-
-			float posx=0;
-			float posy=0;
-			float fPosX = 0;
-			float fPosY = 0;
-			bool	bFlyingOver = false;
-
-			for(size_t i=0; i < SPELL_TYPES_COUNT; i++) {
-				if(spellicons[i].level==Book_SpellPage && !spellicons[i].bSecret) {
-					// check if player can cast it
-					bool bOk = true;
-					long j = 0;
-
-					while(j < 4 && (spellicons[i].symbols[j] != RUNE_NONE)) {
-						if(!(player.rune_flags & (RuneFlag)(1<<spellicons[i].symbols[j]))) {
-							bOk = false;
-						}
-
-						j++;
-					}
-
-					if(bOk) {
-						fPosX = 170.f + posx * 85.f;
-						fPosY = 135.f + posy * 70.f;
-						long flyingover = 0;
-
-						if(MouseInBookRect(fPosX, fPosY, fPosX + 48, fPosY + 48)) {
-							bFlyingOver = true;
-							flyingover = 1;
-
-							SpecialCursor=CURSOR_INTERACTION_ON;
-							DrawBookTextCenter(hFontInBook, Vec2f(208, 90), spellicons[i].name, Color::none);
-
-							for(size_t si = 0; si < MAX_SPEECH; si++) {
-								if(speech[si].timecreation > 0)
-									FLYING_OVER=0;
-							}
-
-							OLD_FLYING_OVER = FLYING_OVER;
-							pTextManage->Clear();
-							UNICODE_ARXDrawTextCenteredScroll(hFontInGame,
-								static_cast<float>(g_size.center().x),
-								12,
-								(g_size.center().x)*0.82f,
-								spellicons[i].description,
-								Color(232,204,143),
-								1000,
-								0.01f,
-								2,
-								0);
-
-							long count = 0;
-							
-							for(long j = 0; j < 6; ++j)
-								if(spellicons[i].symbols[j] != RUNE_NONE)
-									++count;
-
-							GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterLinear);
-							for(int j = 0; j < 6; ++j) {
-								if(spellicons[i].symbols[j] != RUNE_NONE) {
-									pos.x = 240 - (count * 32) * 0.5f + j * 32;
-									pos.y = 306;
-									DrawBookInterfaceItem(gui::necklace.pTexTab[spellicons[i].symbols[j]], Vec2f(pos));
-								}
-							}
-							GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterNearest);
-						}
-
-						if(spellicons[i].tc) {
-							GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-							GRenderer->SetBlendFunc(Renderer::BlendZero, Renderer::BlendInvSrcColor);
-							
-							Color color;
-							if(flyingover) {
-								color = Color::white;
-
-								if((EERIEMouseButton & 1)  && !(LastMouseClick & 1)) {
-									player.SpellToMemorize.bSpell = true;
-
-									for(long j = 0; j < 6; j++) {
-										player.SpellToMemorize.iSpellSymbols[j] = spellicons[i].symbols[j];
-									}
-
-									player.SpellToMemorize.lTimeCreation = (unsigned long)(arxtime);
-								}
-							} else {
-								color = Color(168, 208, 223, 255);
-							}
-							
-							GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterLinear);
-							DrawBookInterfaceItem(spellicons[i].tc, Vec2f(fPosX, fPosY), color);
-							GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterNearest);
-
-							GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						}
-
-						posx ++;
-
-						if(posx >= 2) {
-							posx = 0;
-							posy ++;
-						}
-					}
-				}
-			}
-
-			if(!bFlyingOver) {
-				OLD_FLYING_OVER = -1;
-				FLYING_OVER = -1;
-			}
-
-			*light = tl;
-			
-			SetActiveCamera(oldcam);
-			PrepareCamera(oldcam, g_size);
-		}
-	}
-}
-
-void ARX_INTERFACE_ManageOpenedBook() {
-	arx_assert(entities.player());
-	
-	GRenderer->SetRenderState(Renderer::Fog, false);
-	
-	BOOKDEC.x = 0;
-	BOOKDEC.y = 0;
-	
-	GRenderer->GetTextureStage(0)->setMinFilter(TextureStage::FilterLinear);
-	GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterLinear);
-	
-	if(ARXmenu.currentmode != AMCM_NEWQUEST) {
-		switch(Book_Mode) {
-			case BOOKMODE_STATS: {
-				DrawBookInterfaceItem(ITC.playerbook, Vec2f(97, 64), Color::white, 0.9999f);
-				break;
-			}
-			case BOOKMODE_SPELLS: {
-				DrawBookInterfaceItem(ITC.ptexspellbook, Vec2f(97, 64), Color::white, 0.9999f);
-				break;
-			}
-			case BOOKMODE_MINIMAP: {
-				DrawBookInterfaceItem(ITC.questbook, Vec2f(97, 64), Color::white, 0.9999f);
-				break;
-			}
-			case BOOKMODE_QUESTS: {
-				gui::manageQuestBook();
-				break;
-			}
-		}
-	} else {
-		arx_assert(ITC.playerbook);
-		float x = (640 - ITC.playerbook->m_dwWidth) / 2.f;
-		float y = (480 - ITC.playerbook->m_dwHeight) / 2.f;
-		
-		DrawBookInterfaceItem(ITC.playerbook, Vec2f(x, y));
-
-		BOOKDEC.x = x - 97;
-		// TODO copy paste error ?
-		BOOKDEC.y = x - 64 + 19;
-	}
-	
-	if(ARXmenu.currentmode != AMCM_NEWQUEST) {
-		bool bOnglet[11];
-		long max_onglet = 0;
-		long Book_Page = 1;
-
-		// Checks Clicks in bookmarks
-		
-		// Character Sheet
-		if(Book_Mode != BOOKMODE_STATS) {
-			Vec2f pos = Vec2f(BOOKMARKS_POS_X, BOOKMARKS_POS_Y);
-			
-			TextureContainer* tcBookmarkChar = ITC.bookmark_char;
-			DrawBookInterfaceItem(tcBookmarkChar, pos);
-
-			// Check for cursor on charcter sheet bookmark
-			if(MouseInBookRect(pos.x, pos.y, pos.x + tcBookmarkChar->m_dwWidth, pos.y + tcBookmarkChar->m_dwHeight)) {
-				// Draw highlighted Character sheet icon
-				GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-				GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-				DrawBookInterfaceItem(tcBookmarkChar, pos, Color::grayb(0x55));
-				GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-
-				// Set cursor to interacting
-				SpecialCursor=CURSOR_INTERACTION_ON;
-
-				// Check for click
-				if(bookclick) {
-					ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-					openBookPage(BOOKMODE_STATS);
-					pTextManage->Clear();
-				}
-			}
-		}
-
-		if(Book_Mode != BOOKMODE_SPELLS) {
-			if(player.rune_flags) {
-				Vec2f pos = Vec2f(BOOKMARKS_POS_X + 32, BOOKMARKS_POS_Y);
-				
-				DrawBookInterfaceItem(ITC.bookmark_magic, pos);
-
-				if(NewSpell == 1) {
-					NewSpell = 2;
-					for(long nk = 0; nk < 2; nk++) {
-						MagFX(Vec3f(BOOKDEC.x + 220.f, BOOKDEC.y + 49.f, 0.000001f));
-					}
-				}
-				
-				if(MouseInBookRect(pos.x, pos.y, pos.x + ITC.bookmark_magic->m_dwWidth, pos.y + ITC.bookmark_magic->m_dwHeight)) {
-					// Draw highlighted Magic sheet icon
-					GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-					GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-					DrawBookInterfaceItem(ITC.bookmark_magic, pos, Color::grayb(0x55));
-					GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-
-					// Set cursor to interacting
-					SpecialCursor=CURSOR_INTERACTION_ON;
-
-					// Check for click
-					if(bookclick) {
-						ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						openBookPage(BOOKMODE_SPELLS);
-						pTextManage->Clear();
-					}
-				}
-			}
-		}
-
-		if(Book_Mode != BOOKMODE_MINIMAP) {
-			Vec2f pos = Vec2f(BOOKMARKS_POS_X + 64, BOOKMARKS_POS_Y);
-			
-			DrawBookInterfaceItem(ITC.bookmark_map, pos);
-
-			if(MouseInBookRect(pos.x, pos.y, pos.x + ITC.bookmark_map->m_dwWidth, pos.y + ITC.bookmark_map->m_dwHeight)) {
-				GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-				GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-				DrawBookInterfaceItem(ITC.bookmark_map, pos, Color::grayb(0x55));
-				GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-
-				// Set cursor to interacting
-				SpecialCursor=CURSOR_INTERACTION_ON;
-
-				// Check for click
-				if(bookclick) {
-					ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-					openBookPage(BOOKMODE_MINIMAP);
-					pTextManage->Clear();
-				}
-			}
-		}
-
-		if(Book_Mode != BOOKMODE_QUESTS) {
-			Vec2f pos = Vec2f(BOOKMARKS_POS_X + 96, BOOKMARKS_POS_Y);
-			
-			DrawBookInterfaceItem(ITC.bookmark_quest, pos);
-
-			if(MouseInBookRect(pos.x, pos.y, pos.x + ITC.bookmark_quest->m_dwWidth, pos.y + ITC.bookmark_quest->m_dwHeight)) {
-				GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-				GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-				DrawBookInterfaceItem(ITC.bookmark_quest, pos, Color::grayb(0x55));
-				GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-
-				// Set cursor to interacting
-				SpecialCursor=CURSOR_INTERACTION_ON;
-
-				// Check for click
-				if(bookclick) {
-					ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-					openBookPage(BOOKMODE_QUESTS);
-					pTextManage->Clear();
-				}
-			}
-		}
-		
-		if(Book_Mode == BOOKMODE_MINIMAP)
-			max_onglet=8;
-		else
-			max_onglet=10;
-
-		if(Book_Mode == BOOKMODE_SPELLS)
-			Book_Page = Book_SpellPage;
-		else
-			Book_Page = Book_MapPage;
-
-		std::fill_n(bOnglet, 11, false);
-
-		// calcul de la page de spells
-		if(Book_Mode == BOOKMODE_SPELLS) {
-			for(size_t i = 0; i < SPELL_TYPES_COUNT; ++i) {
-				if(spellicons[i].bSecret == false) {
-					bool bOk = true;
-
-					for(long j = 0; j < 4 && spellicons[i].symbols[j] != RUNE_NONE; ++j) {
-						if(!(player.rune_flags & (RuneFlag)(1<<spellicons[i].symbols[j])))
-							bOk = false;
-					}
-
-					if(bOk)
-						bOnglet[spellicons[i].level] = true;
-				}
-			}
-		} else {
-			memset(bOnglet, true, (max_onglet + 1) * sizeof(*bOnglet));
-		}
-		
-		if(Book_Mode == BOOKMODE_SPELLS || Book_Mode == BOOKMODE_MINIMAP) {
-			if(bOnglet[1]) {
-				if(Book_Page!=1) {
-					Vec2f pos = Vec2f(100.f, 82.f);
-					
-					DrawBookInterfaceItem(ITC.accessible_1, pos);
-
-					if(MouseInBookRect(pos.x, pos.y, pos.x + 32, pos.y + 32)) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						DrawBookInterfaceItem(ITC.accessible_1, pos, Color::grayb(0x55));
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						if(bookclick) {
-							Book_Page=1;
-							ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						}
-					}
-				}
-				else DrawBookInterfaceItem(ITC.current_1, Vec2f(102.f, 82.f));
-			}
-
-			if(bOnglet[2]) {
-				if(Book_Page!=2) {
-					Vec2f pos = Vec2f(98.f, 112.f);
-					
-					DrawBookInterfaceItem(ITC.accessible_2, pos);
-
-					if(MouseInBookRect(pos.x, pos.y, pos.x + 32, pos.y + 32)) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						DrawBookInterfaceItem(ITC.accessible_2, pos, Color::grayb(0x55));
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						if(bookclick) {
-							Book_Page=2;
-							ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						}
-					}
-				}
-				else DrawBookInterfaceItem(ITC.current_2, Vec2f(100.f, 114.f));
-			}
-
-			if(bOnglet[3]) {
-				if(Book_Page!=3) {
-					Vec2f pos = Vec2f(97.f, 143.f);
-					
-					DrawBookInterfaceItem(ITC.accessible_3, pos);
-
-					if(MouseInBookRect(pos.x, pos.y, pos.x + 32, pos.y + 32)) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						DrawBookInterfaceItem(ITC.accessible_3, pos, Color::grayb(0x55));
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						if(bookclick) {
-							Book_Page=3;
-							ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						}
-					}
-				}
-				else DrawBookInterfaceItem(ITC.current_3, Vec2f(101.f, 141.f));
-			}
-
-			if(bOnglet[4]) {
-				if(Book_Page!=4) {
-					Vec2f pos = Vec2f(95.f, 170.f);
-					
-					DrawBookInterfaceItem(ITC.accessible_4, pos);
-
-					if(MouseInBookRect(pos.x, pos.y, pos.x + 32, pos.y + 32)) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						DrawBookInterfaceItem(ITC.accessible_4, pos, Color::grayb(0x55));
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						if(bookclick) {
-							Book_Page=4;
-							ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						}
-					}
-				}
-				else DrawBookInterfaceItem(ITC.current_4, Vec2f(100.f, 170.f));
-			}
-
-			if(bOnglet[5]) {
-				if(Book_Page!=5) {
-					Vec2f pos = Vec2f(95.f, 200.f);
-					
-					DrawBookInterfaceItem(ITC.accessible_5, pos);
-
-					if(MouseInBookRect(pos.x, pos.y, pos.x + 32, pos.y + 32)) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						DrawBookInterfaceItem(ITC.accessible_5, pos, Color::grayb(0x55));
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						if(bookclick) {
-							Book_Page=5;
-							ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						}
-					}
-				}
-				else DrawBookInterfaceItem(ITC.current_5, Vec2f(97.f, 199.f));
-			}
-
-			if(bOnglet[6]) {
-				if(Book_Page!=6) {
-					Vec2f pos = Vec2f(94.f, 229.f);
-					
-					DrawBookInterfaceItem(ITC.accessible_6, pos);
-
-					if(MouseInBookRect(pos.x, pos.y, pos.x + 32, pos.y + 32)) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						DrawBookInterfaceItem(ITC.accessible_6, pos, Color::grayb(0x55));
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						if(bookclick) {
-							Book_Page=6;
-							ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						}
-					}
-				}
-				else DrawBookInterfaceItem(ITC.current_6, Vec2f(103.f, 226.f));
-			}
-
-			if(bOnglet[7]) {
-				if(Book_Page!=7) {
-					Vec2f pos = Vec2f(94.f, 259.f);
-					
-					DrawBookInterfaceItem(ITC.accessible_7, pos);
-
-					if(MouseInBookRect(pos.x, pos.y, pos.x + 32, pos.y + 32)) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						DrawBookInterfaceItem(ITC.accessible_7, pos, Color::grayb(0x55));
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						if(bookclick) {
-							Book_Page=7;
-							ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						}
-					}
-				}
-				else DrawBookInterfaceItem(ITC.current_7, Vec2f(101.f, 255.f));
-			}
-
-			if(bOnglet[8]) {
-				if(Book_Page!=8) {
-					Vec2f pos = Vec2f(92.f, 282.f);
-					
-					DrawBookInterfaceItem(ITC.accessible_8, pos);
-
-					if(MouseInBookRect(pos.x, pos.y, pos.x + 32, pos.y + 32)) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						DrawBookInterfaceItem(ITC.accessible_8, pos, Color::grayb(0x55));
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						if(bookclick) {
-							Book_Page=8;
-							ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						}
-					}
-				}
-				else DrawBookInterfaceItem(ITC.current_8, Vec2f(99.f, 283.f));
-			}
-
-			if(bOnglet[9]) {
-				if(Book_Page!=9) {
-					Vec2f pos = Vec2f(90.f, 308.f);
-					
-					DrawBookInterfaceItem(ITC.accessible_9, pos);
-
-					if(MouseInBookRect(pos.x, pos.y, pos.x + 32, pos.y + 32)) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						DrawBookInterfaceItem(ITC.accessible_9, pos, Color::grayb(0x55));
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						if(bookclick) {
-							Book_Page=9;
-							ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						}
-					}
-				}
-				else DrawBookInterfaceItem(ITC.current_9, Vec2f(99.f, 307.f));
-			}
-
-			if (bOnglet[10]) {
-				if (Book_Page!=10) {
-					Vec2f pos = Vec2f(97.f, 331.f);
-					
-					DrawBookInterfaceItem(ITC.accessible_10, pos);
-
-					if(MouseInBookRect(pos.x, pos.y, pos.x + 32, pos.y + 32)) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						DrawBookInterfaceItem(ITC.accessible_10, pos, Color::grayb(0x55));
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						if(bookclick) {
-							Book_Page=10;
-							ARX_SOUND_PlayInterface(SND_BOOK_PAGE_TURN, 0.9F + 0.2F * rnd());
-						}
-					}
-				}
-				else DrawBookInterfaceItem(ITC.current_10, Vec2f(104.f, 331.f));
-			}
-			
-			if(Book_Mode == BOOKMODE_SPELLS) {
-				Book_SpellPage = Book_Page;
-			} else if(Book_Mode == BOOKMODE_MINIMAP) {
-				Book_MapPage = Book_Page;
-			}
-		}
-
-		bookclick = false;
-	}
-	
-	GRenderer->GetTextureStage(0)->setMinFilter(TextureStage::FilterNearest);
-	GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterNearest);
-
-	if (Book_Mode == BOOKMODE_STATS)
-	{
-		FLYING_OVER = 0;
-		std::string tex;
-		Color color(0, 0, 0);
-
-		ARX_PLAYER_ComputePlayerFullStats();
-
-		std::stringstream ss;
-		ss << ITC.Level << " " << std::setw(3) << (int)player.level;
-		tex = ss.str();
-		DrawBookTextCenter(hFontInBook, Vec2f(398, 74), tex, color);
-
-		std::stringstream ss2;
-		ss2 << ITC.Xp << " " << std::setw(8) << player.xp;
-		tex = ss2.str();
-		DrawBookTextCenter(hFontInBook, Vec2f(510, 74), tex, color);
-
-		if (MouseInBookRect(463, 74, 550, 94))
-			FLYING_OVER = WND_XP;
-
-		if (MouseInBookRect(97+41,64+62, 97+41+32, 64+62+32))
-			FLYING_OVER = WND_AC;
-		else if (MouseInBookRect(97+41,64+120, 97+41+32, 64+120+32))
-			FLYING_OVER = WND_RESIST_MAGIC;
-		else if (MouseInBookRect(97+41,64+178, 97+41+32, 64+178+32))
-			FLYING_OVER = WND_RESIST_POISON;
-		else if (MouseInBookRect(97+211,64+62, 97+211+32, 64+62+32))
-			FLYING_OVER = WND_HP;
-		else if (MouseInBookRect(97+211,64+120, 97+211+32, 64+120+32))
-			FLYING_OVER = WND_MANA;
-		else if (MouseInBookRect(97+211,64+178, 97+211+32, 64+178+32))
-			FLYING_OVER = WND_DAMAGE;
-
-		if(!((player.Attribute_Redistribute == 0) && (ARXmenu.currentmode != AMCM_NEWQUEST))) {
-			// Main Player Attributes
-			if(CheckAttributeClick(379, 95, &player.m_attribute.strength, ITC.ic_strength)) {
-				FLYING_OVER = BOOK_STRENGTH;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Attribute_Redistribute;
-			}
-
-			if(CheckAttributeClick(428, 95, &player.m_attribute.mind, ITC.ic_mind)) {
-				FLYING_OVER = BOOK_MIND;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Attribute_Redistribute;
-			}
-
-			if(CheckAttributeClick(477, 95, &player.m_attribute.dexterity, ITC.ic_dexterity)) {
-				FLYING_OVER = BOOK_DEXTERITY;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Attribute_Redistribute;
-			}
-
-			if(CheckAttributeClick(526, 95, &player.m_attribute.constitution, ITC.ic_constitution)) {
-				FLYING_OVER = BOOK_CONSTITUTION;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Attribute_Redistribute;
-			}
-		}
-
-		if(!((player.Skill_Redistribute == 0) && (ARXmenu.currentmode != AMCM_NEWQUEST))) {
-			if (CheckSkillClick(389, 177, &player.m_skill.stealth, ITC.ic_stealth, &player.m_skillOld.stealth)) {
-				FLYING_OVER = BOOK_STEALTH;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Skill_Redistribute;
-			}
-
-			if(CheckSkillClick(453, 177, &player.m_skill.mecanism, ITC.ic_mecanism, &player.m_skillOld.mecanism)) {
-				FLYING_OVER = BOOK_MECANISM;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Skill_Redistribute;
-			}
-
-			if(CheckSkillClick(516, 177, &player.m_skill.intuition, ITC.ic_intuition, &player.m_skillOld.intuition)) {
-				FLYING_OVER = BOOK_INTUITION;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Skill_Redistribute;
-			}
-
-			if(CheckSkillClick(389, 230, &player.m_skill.etheralLink, ITC.ic_etheral_link, &player.m_skillOld.etheralLink)) {
-				FLYING_OVER = BOOK_ETHERAL_LINK;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Skill_Redistribute;
-			}
-
-			if(CheckSkillClick(453, 230, &player.m_skill.objectKnowledge, ITC.ic_object_knowledge, &player.m_skillOld.objectKnowledge)) {
-				FLYING_OVER = BOOK_OBJECT_KNOWLEDGE;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Skill_Redistribute;
-
-				if((BOOKBUTTON & 1) && !(LASTBOOKBUTTON & 1)) {
-					ARX_INVENTORY_IdentifyAll();
-					ARX_EQUIPMENT_IdentifyAll();
-				}
-
-				ARX_PLAYER_ComputePlayerFullStats();
-			}
-
-			if(CheckSkillClick(516, 230, &player.m_skill.casting, ITC.ic_casting, &player.m_skillOld.casting)) {
-				FLYING_OVER = BOOK_CASTING;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Skill_Redistribute;
-			}
-
-			if(CheckSkillClick(389, 284, &player.m_skill.closeCombat, ITC.ic_close_combat, &player.m_skillOld.closeCombat)) {
-				FLYING_OVER = BOOK_CLOSE_COMBAT;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Skill_Redistribute;
-			}
-
-			if(CheckSkillClick(453, 284, &player.m_skill.projectile, ITC.ic_projectile, &player.m_skillOld.projectile)) {
-				FLYING_OVER = BOOK_PROJECTILE;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Skill_Redistribute;
-			}
-
-			if(CheckSkillClick(516, 284, &player.m_skill.defense, ITC.ic_defense, &player.m_skillOld.defense)) {
-				FLYING_OVER = BOOK_DEFENSE;
-				SpecialCursor = CURSOR_REDIST;
-				lCursorRedistValue = player.Skill_Redistribute;
-			}
-		} else {
-			//------------------------------------PRIMARY
-			if (MouseInBookRect(379,95, 379+32, 95+32))
-				FLYING_OVER=BOOK_STRENGTH;
-			else if (MouseInBookRect(428,95, 428+32, 95+32))
-				FLYING_OVER=BOOK_MIND;
-			else if (MouseInBookRect(477,95, 477+32, 95+32))
-				FLYING_OVER=BOOK_DEXTERITY;
-			else if (MouseInBookRect(526,95, 526+32, 95+32))
-				FLYING_OVER=BOOK_CONSTITUTION;
-
-			//------------------------------------SECONDARY
-			if (MouseInBookRect(389,177, 389+32, 177+32))
-				FLYING_OVER=BOOK_STEALTH;
-			else if (MouseInBookRect(453,177, 453+32, 177+32))
-				FLYING_OVER=BOOK_MECANISM;
-			else if (MouseInBookRect(516,177, 516+32, 177+32))
-				FLYING_OVER=BOOK_INTUITION;
-			else if (MouseInBookRect(389,230, 389+32, 230+32))
-				FLYING_OVER=BOOK_ETHERAL_LINK;
-			else if (MouseInBookRect(453,230, 453+32, 230+32))
-				FLYING_OVER=BOOK_OBJECT_KNOWLEDGE;
-			else if (MouseInBookRect(516,230, 516+32, 230+32))
-				FLYING_OVER=BOOK_CASTING;
-			else if (MouseInBookRect(389,284, 389+32, 284+32))
-				FLYING_OVER=BOOK_CLOSE_COMBAT;
-			else if (MouseInBookRect(453,284, 453+32, 284+32))
-				FLYING_OVER=BOOK_PROJECTILE;
-			else if (MouseInBookRect(516,284, 516+32, 284+32))
-				FLYING_OVER=BOOK_DEFENSE;
-		}
-
-		//------------------------------ SEB 04/12/2001
-		if(ARXmenu.mda && !ARXmenu.mda->flyover[FLYING_OVER].empty()) {
-			
-			float fRandom = rnd() * 2;
-
-			int t = checked_range_cast<int>(fRandom);
-
-			pTextManage->Clear();
-			OLD_FLYING_OVER=FLYING_OVER;
-
-			std::string toDisplay;
-
-			// Nuky Note: the text used never scrolls, centered function with wordwrap would be enough
-			if(FLYING_OVER == WND_XP) {
-				std::stringstream ss;
-				ss << ARXmenu.mda->flyover[WND_XP] << " " << std::setw(8) << GetXPforLevel(player.level+1)-player.xp;
-
-				toDisplay = ss.str();
-			} else {
-				toDisplay = ARXmenu.mda->flyover[FLYING_OVER];
-			}
-
-			UNICODE_ARXDrawTextCenteredScroll(hFontInGame,
-				(g_size.width()*0.5f),
-				4,
-				(g_size.center().x)*0.82f,
-				toDisplay,
-				Color(232+t,204+t,143+t),
-				1000,
-				0.01f,
-				3,
-				0);
-		} else {
-			OLD_FLYING_OVER=-1;
-		}
-
-		//------------------------------
-		
-		std::stringstream ss3;
-		ss3 << std::setw(3) << std::setprecision(0) << std::fixed << player.m_attributeFull.strength;
-		tex = ss3.str();
-		
-		if(player.m_attributeMod.strength < 0.f)
-			color = Color::red;
-		else if(player.m_attributeMod.strength > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_attributeFull.strength == 6)
-				color = Color::red;
-		}
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(391, 129), tex, color);
-		
-		ss3.str(""); // clear the stream
-		ss3 << player.m_attributeFull.mind;
-		tex = ss3.str();
-		
-		if(player.m_attributeMod.mind < 0.f)
-			color = Color::red;
-		else if(player.m_attributeMod.mind > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_attributeFull.mind == 6)
-				color = Color::red;
-		}
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(440, 129), tex, color);
-		
-		ss3.str("");
-		ss3 << player.m_attributeFull.dexterity;
-		tex = ss3.str();
-
-		if(player.m_attributeMod.dexterity < 0.f)
-			color = Color::red;
-		else if(player.m_attributeMod.dexterity > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_attributeFull.dexterity == 6)
-				color = Color::red;
-		}
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(490, 129), tex, color);
-		ss3.str("");
-		ss3 << player.m_attributeFull.constitution;
-		tex = ss3.str();
-		
-		if(player.m_attributeMod.constitution < 0.f)
-			color = Color::red;
-		else if(player.m_attributeMod.constitution > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_attributeFull.constitution == 6)
-				color = Color::red;
-		}
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(538, 129), tex, color);
-		
-		// Player Skills
-		ss3.str("");
-		ss3 << player.m_skillFull.stealth;
-		tex = ss3.str();
-		
-		if (player.m_skillMod.stealth < 0.f)
-			color = Color::red;
-		else if (player.m_skillMod.stealth > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_skill.stealth == 0)
-				color = Color::red;
-		}
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(405, 210), tex, color);
-		
-		ss3.str("");
-		ss3 << player.m_skillFull.mecanism;
-		tex = ss3.str();
-		
-		if (player.m_skillMod.mecanism < 0.f)
-			color = Color::red;
-		else if (player.m_skillMod.mecanism > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_skill.mecanism == 0)
-				color = Color::red;
-		}
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(469, 210), tex, color);
-		
-		ss3.str("");
-		ss3 << player.m_skillFull.intuition;
-		tex = ss3.str();
-		
-		if (player.m_skillMod.intuition < 0.f)
-			color = Color::red;
-		else if (player.m_skillMod.intuition > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_skill.intuition == 0)
-				color = Color::red;
-		}
-
-		DrawBookTextCenter(hFontInBook, Vec2f(533, 210), tex, color);
-		
-		ss3.str("");
-		ss3 << player.m_skillFull.etheralLink;
-		tex = ss3.str();
-
-		if(player.m_skillMod.etheralLink < 0.f)
-			color = Color::red;
-		else if(player.m_skillMod.etheralLink > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_skill.etheralLink == 0)
-				color = Color::red;
-		}
-
-		DrawBookTextCenter(hFontInBook, Vec2f(405, 265), tex, color);
-		
-		ss3.str("");
-		ss3 << player.m_skillFull.objectKnowledge;
-		tex = ss3.str();
-
-		if(player.m_skillMod.objectKnowledge < 0.f)
-			color = Color::red;
-		else if(player.m_skillMod.objectKnowledge > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_skill.objectKnowledge == 0)
-				color = Color::red;
-		}
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(469, 265), tex, color);
-		
-		ss3.str("");
-		ss3 << player.m_skillFull.casting;
-		tex = ss3.str();
-		
-		if (player.m_skillMod.casting < 0.f)
-			color = Color::red;
-		else if (player.m_skillMod.casting > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_skill.casting == 0)
-				color = Color::red;
-		}
-
-		DrawBookTextCenter(hFontInBook, Vec2f(533, 265), tex, color);
-		
-		ss3.str("");
-		ss3 << player.m_skillFull.closeCombat;
-		tex = ss3.str();
-
-		if (player.m_skillMod.closeCombat < 0.f)
-			color = Color::red;
-		else if (player.m_skillMod.closeCombat > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_skill.closeCombat == 0)
-				color = Color::red;
-		}
-
-		DrawBookTextCenter(hFontInBook, Vec2f(405, 319), tex, color);
-
-		
-		ss3.str("");
-		ss3 << player.m_skillFull.projectile;
-		tex = ss3.str();
-
-		if(player.m_skillMod.projectile < 0.f)
-			color = Color::red;
-		else if(player.m_skillMod.projectile > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_skill.projectile == 0)
-				color = Color::red;
-		}
-
-		DrawBookTextCenter(hFontInBook, Vec2f(469, 319), tex, color);
-		
-		ss3.str("");
-		ss3 << player.m_skillFull.defense;
-		tex = ss3.str();
-
-		if (player.m_skillMod.defense < 0.f)
-			color = Color::red;
-		else if (player.m_skillMod.defense > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			if(player.m_skill.defense == 0)
-				color = Color::red;
-		}
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(533, 319), tex, color);
-		
-		// Secondary Attributes
-		std::stringstream ss4;
-		ss4.str("");
-		ss4 << F2L_RoundUp(player.Full_maxlife);
-		tex = ss4.str();
-		
-		if(player.Full_maxlife < player.lifePool.max) {
-			color = Color::red;
-		} else if(player.Full_maxlife > player.lifePool.max) {
-			color = Color::blue;
-		} else {
-			color = Color::black;
-		}
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(324, 158), tex, color);
-		
-		ss4.str("");
-		ss4 << F2L_RoundUp(player.Full_maxmana);
-		tex = ss4.str();
-
-		if(player.Full_maxmana < player.manaPool.max) {
-			color = Color::red;
-		} else if(player.Full_maxmana > player.manaPool.max) {
-			color = Color::blue;
-		} else {
-			color = Color::black;
-		}
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(324, 218), tex, color);
-		
-		ss4.str("");
-		ss4 << F2L_RoundUp(player.m_miscFull.damages);
-		tex = ss4.str();
-		
-		if (player.m_miscMod.damages < 0.f)
-			color = Color::red;
-		else if (player.m_miscMod.damages > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(324, 278), tex, color);
-		
-		float ac = player.m_miscFull.armorClass;
-		ss4.str("");
-		ss4 << F2L_RoundUp(ac);
-		tex = ss4.str();
-		
-		if (player.m_miscMod.armorClass < 0.f)
-			color = Color::red;
-		else if (player.m_miscMod.armorClass > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(153, 158), tex, color);
-		
-		ss4.str("");
-		ss4 << std::setw(3) << std::setprecision(0) << F2L_RoundUp( player.m_miscFull.resistMagic );
-		tex = ss4.str();
-		
-		if (player.m_miscMod.resistMagic < 0.f)
-			color = Color::red;
-		else if (player.m_miscMod.resistMagic > 0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(153, 218), tex, color);
-		
-		ss4.str("");
-		ss4 << F2L_RoundUp( player.m_miscFull.resistPoison );
-		tex = ss4.str();
-
-		if (player.m_miscMod.resistPoison<0.f)
-			color = Color::red;
-		else if (player.m_miscMod.resistPoison>0.f)
-			color = Color::blue;
-		else
-			color = Color::black;
-		
-		DrawBookTextCenter(hFontInBook, Vec2f(153, 278), tex, color);
-	} else if (Book_Mode == BOOKMODE_MINIMAP) {
-		long SHOWLEVEL = Book_MapPage - 1;
-
-		if(SHOWLEVEL >= 0 && SHOWLEVEL < 32)
-			g_miniMap.showBookEntireMap(SHOWLEVEL);
-
-		SHOWLEVEL = ARX_LEVELS_GetRealNum(CURRENTLEVEL);
-
-		if(SHOWLEVEL >= 0 && SHOWLEVEL < 32)
-			g_miniMap.showBookMiniMap(SHOWLEVEL);
-	}
-
-	if((Book_Mode == BOOKMODE_STATS) && entities.player()->obj) {
-		
-		GRenderer->SetRenderState(Renderer::DepthWrite, true);
-
-		Rect rec;
-		if (BOOKZOOM) {
-			
-			rec = Rect(s32((120.f + BOOKDEC.x) * g_sizeRatio.x), s32((69.f + BOOKDEC.y) * g_sizeRatio.y),
-			           s32((330.f + BOOKDEC.x) * g_sizeRatio.x), s32((300.f + BOOKDEC.y) * g_sizeRatio.y));
-			GRenderer->Clear(Renderer::DepthBuffer, Color::none, 1.f, 1, &rec);
-
-			if(ARXmenu.currentmode != AMCM_OFF) {
-				Rect vp = Rect(Vec2i(s32(139.f * g_sizeRatio.x), 0), s32(139.f * g_sizeRatio.x), s32(310.f * g_sizeRatio.y));
-				GRenderer->SetScissor(vp);
-			}
-		} else {
-			
-			rec = Rect(s32((118.f + BOOKDEC.x) * g_sizeRatio.x), s32((69.f + BOOKDEC.y) * g_sizeRatio.y),
-			          s32((350.f + BOOKDEC.x) * g_sizeRatio.x), s32((338.f + BOOKDEC.y) * g_sizeRatio.y));
-			GRenderer->Clear(Renderer::DepthBuffer, Color::none, 1.f, 1, &rec);
-
-			rec.right -= 50;
-		}
-
-		if (ARXmenu.currentmode==AMCM_OFF)
-			BOOKZOOM=0;
-
-		Vec3f pos;
-		EERIE_LIGHT eLight1;
-		EERIE_LIGHT eLight2;
-		
-		eLight1.pos = Vec3f(50.f, 50.f, 200.f);
-		eLight1.exist = 1;
-		eLight1.rgb = Color3f(0.15f, 0.06f, 0.003f);
-		eLight1.intensity = 8.8f;
-		eLight1.fallstart = 2020;
-		eLight1.fallend = eLight1.fallstart + 60;
-		RecalcLight(&eLight1);
-		
-		eLight2.exist = 1;
-		eLight2.pos = Vec3f(-50.f, -50.f, -200.f);
-		eLight2.rgb = Color3f::gray(0.6f);
-		eLight2.intensity=3.8f;
-		eLight2.fallstart = 0;
-		eLight2.fallend = eLight2.fallstart + 3460.f;
-		RecalcLight(&eLight2);
-		
-		EERIE_LIGHT * SavePDL[2];
-		SavePDL[0]=PDL[0];
-		SavePDL[1]=PDL[1];
-		int			iSavePDL=TOTPDL;
-
-		PDL[0] = &eLight1;
-		PDL[1] = &eLight2;
-		TOTPDL = 2;
-
-		EERIE_CAMERA * oldcam = ACTIVECAM;
-		bookcam.center = rec.center();
-		SetActiveCamera(&bookcam);
-		PrepareCamera(&bookcam, g_size);
-
-		Anglef ePlayerAngle = Anglef::ZERO;
-
-		if(BOOKZOOM) {
-			Rect vp;
-			vp.left = static_cast<int>(rec.left + 52.f * g_sizeRatio.x);
-			vp.top = rec.top;
-			vp.right = static_cast<int>(rec.right - 21.f * g_sizeRatio.x);
-			vp.bottom = static_cast<int>(rec.bottom - 17.f * g_sizeRatio.y);
-			GRenderer->SetScissor(vp);
-
-			switch (player.skin)
-			{
-				case 0:
-					ePlayerAngle.setPitch(-25.f);
-					break;
-				case 1:
-					ePlayerAngle.setPitch(-10.f);
-					break;
-				case 2:
-					ePlayerAngle.setPitch(20.f);
-					break;
-				case 3:
-					ePlayerAngle.setPitch(35.f);
-					break;
-			}
-
-			pos.x=8;
-			pos.y=162.f;
-			pos.z=75.f;
-			eLight1.pos.z=-90.f;
-		} else {
-			GRenderer->SetScissor(rec);
-
-			ePlayerAngle.setPitch(-20.f);
-			pos.x=20.f;
-			pos.y=96.f;
-			pos.z=260.f;
-
-			ARX_EQUIPMENT_AttachPlayerWeaponToHand();
-		}
-
-		bool ti = player.m_improve;
-		player.m_improve = false;
-
-
-		float invisibility = entities.player()->invisibility;
-
-		if(invisibility > 0.5f)
-			invisibility = 0.5f;
-
-		IN_BOOK_DRAW=1;
-		std::vector<EERIE_VERTEX> vertexlist = entities.player()->obj->vertexlist3;
-
-		arx_assert(player.bookAnimation[0].cur_anim);
-
-		EERIEDrawAnimQuat(entities.player()->obj, player.bookAnimation, ePlayerAngle, pos,
-						  checked_range_cast<unsigned long>(Original_framedelay), NULL, true, invisibility);
-
-		IN_BOOK_DRAW=0;
-		
-		if(ARXmenu.currentmode == AMCM_NEWQUEST) {
-			GRenderer->SetRenderState(Renderer::DepthTest, true);
-			GRenderer->GetTextureStage(0)->setMipFilter(TextureStage::FilterNone);
-			GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-			PopAllTriangleList();
-			GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-			PopAllTriangleListTransparency();
-			GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-			GRenderer->GetTextureStage(0)->setMipFilter(TextureStage::FilterLinear);
-			GRenderer->SetRenderState(Renderer::DepthTest, false);
-		}
-
-		PDL[0]=SavePDL[0];
-		PDL[1]=SavePDL[1];
-		TOTPDL=iSavePDL;
-
-		entities.player()->obj->vertexlist3 = vertexlist;
-		vertexlist.clear();
-
-		player.m_improve = ti;
-		
-		GRenderer->SetScissor(Rect::ZERO);
-		
-		GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-		GRenderer->SetCulling(Renderer::CullNone);
-		SetActiveCamera(oldcam);
-		PrepareCamera(oldcam, g_size);
-
-			player.bookAnimation[0].cur_anim = herowaitbook;
-
-			if(player.equiped[EQUIP_SLOT_WEAPON] && ValidIONum(player.equiped[EQUIP_SLOT_WEAPON])) {
-				if(entities[player.equiped[EQUIP_SLOT_WEAPON]]->type_flags & OBJECT_TYPE_2H) {
-					player.bookAnimation[0].cur_anim = herowait_2h;
-				}
-			}
-
-			GRenderer->SetCulling(Renderer::CullNone);
-
-			if(player.equiped[EQUIP_SLOT_ARMOR] && ValidIONum(player.equiped[EQUIP_SLOT_ARMOR])) {
-				Entity *tod = entities[player.equiped[EQUIP_SLOT_ARMOR]];
-				if(tod) {
-					tod->bbox2D.min = Vec2f(195.f, 116.f);
-					tod->bbox2D.max = Vec2f(284.f, 182.f);
-
-					tod->bbox2D.min = (tod->bbox2D.min + BOOKDEC) * g_sizeRatio;
-					tod->bbox2D.max = (tod->bbox2D.max + BOOKDEC) * g_sizeRatio;
-
-					tod->ioflags |= IO_ICONIC;
-				}
-			}
-
-			if(player.equiped[EQUIP_SLOT_LEGGINGS] && ValidIONum(player.equiped[EQUIP_SLOT_LEGGINGS])) {
-				Entity *tod = entities[player.equiped[EQUIP_SLOT_LEGGINGS]];
-				if(tod) {
-					tod->bbox2D.min = Vec2f(218.f, 183.f);
-					tod->bbox2D.max = Vec2f(277.f, 322.f);
-
-					tod->bbox2D.min = (tod->bbox2D.min + BOOKDEC) * g_sizeRatio;
-					tod->bbox2D.max = (tod->bbox2D.max + BOOKDEC) * g_sizeRatio;
-
-					tod->ioflags |= IO_ICONIC;
-				}
-			}
-
-			if(player.equiped[EQUIP_SLOT_HELMET] && ValidIONum(player.equiped[EQUIP_SLOT_HELMET])) {
-				Entity *tod = entities[player.equiped[EQUIP_SLOT_HELMET]];
-				if(tod) {
-					tod->bbox2D.min = Vec2f(218.f, 75.f);
-					tod->bbox2D.max = Vec2f(260.f, 115.f);
-
-					tod->bbox2D.min = (tod->bbox2D.min + BOOKDEC) * g_sizeRatio;
-					tod->bbox2D.max = (tod->bbox2D.max + BOOKDEC) * g_sizeRatio;
-
-					tod->ioflags |= IO_ICONIC;
-				}
-			}
-
-			TextureContainer * tc;
-			TextureContainer * tc2=NULL;
-			GRenderer->SetCulling(Renderer::CullNone);
-
-			if(player.equiped[EQUIP_SLOT_RING_LEFT] && ValidIONum(player.equiped[EQUIP_SLOT_RING_LEFT])) {
-				Entity *todraw = entities[player.equiped[EQUIP_SLOT_RING_LEFT]];
-
-				tc = todraw->inv;
-
-				if(NeedHalo(todraw))
-					tc2 = todraw->inv->getHalo();
-
-				if(tc) {
-					todraw->bbox2D.min = Vec2f(146.f, 312.f);
-
-					Color color = (todraw->poisonous && todraw->poisonous_count != 0) ? Color::green : Color::white;
-					DrawBookInterfaceItem(tc, todraw->bbox2D.min, color, 0);
-
-					if(tc2) {
-						ARX_INTERFACE_HALO_Draw(todraw, tc, tc2, (todraw->bbox2D.min + BOOKDEC) * g_sizeRatio, g_sizeRatio);
-					}
-					
-					todraw->bbox2D.max = todraw->bbox2D.min + Vec2f(tc->size());
-					
-					todraw->bbox2D.min = (todraw->bbox2D.min + BOOKDEC) * g_sizeRatio;
-					todraw->bbox2D.max = (todraw->bbox2D.max + BOOKDEC) * g_sizeRatio;
-
-					todraw->ioflags |= IO_ICONIC;
-				}
-			}
-
-			tc2=NULL;
-
-			if(player.equiped[EQUIP_SLOT_RING_RIGHT] && ValidIONum(player.equiped[EQUIP_SLOT_RING_RIGHT])) {
-				Entity *todraw = entities[player.equiped[EQUIP_SLOT_RING_RIGHT]];
-
-				tc = todraw->inv;
-
-				if(NeedHalo(todraw))
-					tc2 = todraw->inv->getHalo();
-
-				if(tc) {
-					todraw->bbox2D.min = Vec2f(296.f, 312.f);
-
-					Color color = (todraw->poisonous && todraw->poisonous_count != 0) ? Color::green : Color::white;
-					DrawBookInterfaceItem(tc, todraw->bbox2D.min, color, 0);
-
-					if(tc2) {
-						ARX_INTERFACE_HALO_Draw(todraw, tc, tc2, (todraw->bbox2D.min + BOOKDEC) * g_sizeRatio, g_sizeRatio);
-					}
-					
-					todraw->bbox2D.max = todraw->bbox2D.min + Vec2f(tc->size());
-					
-					todraw->bbox2D.min = (todraw->bbox2D.min + BOOKDEC) * g_sizeRatio;
-					todraw->bbox2D.max = (todraw->bbox2D.max + BOOKDEC) * g_sizeRatio;
-
-					todraw->ioflags |= IO_ICONIC;
-				}
-			}
-
-			if(!BOOKZOOM)
-				ARX_EQUIPMENT_AttachPlayerWeaponToBack();
-
-			Halo_Render();
-	}
-}
-
-
 
 //-----------------------------------------------------------------------------
 void ArxGame::manageEditorControls() {
@@ -4079,25 +2124,13 @@ void ArxGame::manageEditorControls() {
 	
 	// on ferme
 	if((player.Interface & INTER_COMBATMODE) || player.doingmagic >= 2) {
-		Entity * io = NULL;
-
-		if(SecondaryInventory)
-			io = SecondaryInventory->io;
-		else if (player.Interface & INTER_STEAL)
-			io = ioSteal;
-
-		if(io) {
-			InventoryDir = -1;
-			SendIOScriptEvent(io, SM_INVENTORY2_CLOSE);
-			TSecondaryInventory = SecondaryInventory;
-			SecondaryInventory = NULL;
-		}
+		gui::CloseSecondaryInventory();
 	}
 	
 	playerInterfaceFader.update();
 	cinematicBorder.update();
 	
-	if(EERIEMouseButton & 1) {
+	if(eeMousePressed1()) {
 		static Vec2s dragThreshold = Vec2s_ZERO;
 		
 		if(!(LastMouseClick & 1)) {
@@ -4148,8 +2181,7 @@ void ArxGame::manageEditorControls() {
 	manageEditorControlsHUD2();
 	
 	// Single Click On Object
-	if(   (LastMouseClick & 1)
-	   && !(EERIEMouseButton & 1)
+	if(   eeMouseUp1()
 	   && FlyingOverIO
 	   && !DRAGINTER
 	) {
@@ -4226,7 +2258,7 @@ void ArxGame::manageEditorControls() {
 	
 	if(!(player.Interface & INTER_COMBATMODE)) {
 		// Dropping an Interactive Object that has been dragged
-		if(!(EERIEMouseButton & 1) && (LastMouseClick & 1) && DRAGINTER) {
+		if(eeMouseUp1() && DRAGINTER) {
 			//if (ARX_EQUIPMENT_PutOnPlayer(DRAGINTER))
 			if(InInventoryPos(DANAEMouse)) {// Attempts to put it in inventory
 				PutInInventory();
@@ -4263,10 +2295,9 @@ void ArxGame::manageEditorControls() {
 						
 						float y_ratio=(float)((float)DANAEMouse.y-(float)g_size.center().y)/(float)g_size.height()*2;
 						float x_ratio=-(float)((float)DANAEMouse.x-(float)g_size.center().x)/(float)g_size.center().x;
-						Vec3f viewvector;
-						viewvector.x = -std::sin(glm::radians(player.angle.getPitch()+(x_ratio*30.f))) * std::cos(glm::radians(player.angle.getYaw()));
-						viewvector.y =  std::sin(glm::radians(player.angle.getYaw())) + y_ratio;
-						viewvector.z =  std::cos(glm::radians(player.angle.getPitch()+(x_ratio*30.f))) * std::cos(glm::radians(player.angle.getYaw()));
+						
+						Vec3f viewvector = angleToVector(player.angle + Anglef(0.f, x_ratio * 30.f, 0.f));
+						viewvector.y += y_ratio;
 						
 						io->soundtime=0;
 						io->soundcount=0;
@@ -4290,7 +2321,7 @@ void ArxGame::manageEditorControls() {
 			}
 		}
 		
-		if((EERIEMouseButton & 1) && !(LastMouseClick & 1) && (COMBINE || COMBINEGOLD)) {
+		if(eeMouseDown1() && (COMBINE || COMBINEGOLD)) {
 			ReleaseInfosCombine();
 			
 			Entity * io;
@@ -4459,7 +2490,7 @@ void ArxGame::manageEditorControls() {
 		}
 	
 		// Debug Selection
-		if((LastMouseClick & 1) && !(EERIEMouseButton & 1)) {
+		if(eeMouseUp1()) {
 			Entity * io = GetFirstInterAtPos(DANAEMouse);
 
 			if(io) {

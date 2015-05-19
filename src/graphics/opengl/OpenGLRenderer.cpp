@@ -22,6 +22,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "core/Application.h"
+#include "core/Config.h"
 #include "graphics/opengl/GLDebug.h"
 #include "graphics/opengl/GLNoVertexBuffer.h"
 #include "graphics/opengl/GLTexture2D.h"
@@ -49,7 +50,7 @@ OpenGLRenderer::OpenGLRenderer()
 	, useVBOs(false)
 	, maxTextureStage(0)
 	, shader(0)
-	, maximumAnisotropy(1.f)
+	, m_maximumAnisotropy(0.f)
 	, m_hasMSAA(false)
 	, m_hasColorKey(false)
 	, m_hasBlend(false)
@@ -252,7 +253,9 @@ void OpenGLRenderer::reinit() {
 	}
 	
 	if(GLEW_EXT_texture_filter_anisotropic) {
-		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &maximumAnisotropy);
+		GLfloat limit;
+		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &limit);
+		m_maximumAnisotropy = std::min(float(config.video.maxAnisotropicFiltering), limit);
 	}
 	
 	onRendererInit();
@@ -282,7 +285,7 @@ void OpenGLRenderer::shutdown() {
 	}
 	m_TextureStages.clear();
 	
-	maximumAnisotropy = 1.f;
+	m_maximumAnisotropy = 0.f;
 	
 }
 
@@ -469,11 +472,11 @@ void OpenGLRenderer::SetRenderState(RenderState renderState, bool enable) {
 			 *      always used as part of the blending factor.
 			 */
 			bool colorkey = m_hasColorKey;
-			if(colorkey && m_hasMSAA) {
+			if(colorkey && m_hasMSAA && config.video.colorkeyAlphaToCoverage) {
 				SetRenderState(ColorKey, false);
 			}
 			m_hasBlend = enable;
-			if(colorkey && m_hasMSAA) {
+			if(colorkey && m_hasMSAA && config.video.colorkeyAlphaToCoverage) {
 				SetRenderState(ColorKey, true);
 			}
 			setGLState(GL_BLEND, enable);
@@ -485,7 +488,7 @@ void OpenGLRenderer::SetRenderState(RenderState renderState, bool enable) {
 				return;
 			}
 			m_hasColorKey = enable;
-			if(m_hasMSAA && !m_hasBlend) {
+			if(m_hasMSAA && config.video.colorkeyAlphaToCoverage && !m_hasBlend) {
 				// TODO(option-video) add a config option for this
 				setGLState(GL_SAMPLE_ALPHA_TO_COVERAGE, enable);
 			} else {

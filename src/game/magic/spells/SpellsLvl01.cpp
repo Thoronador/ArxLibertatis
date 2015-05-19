@@ -377,29 +377,23 @@ void DouseSpell::Launch()
 		switch(spell->m_type) {
 			
 			case SPELL_FIREBALL: {
-				CSpellFx * pCSpellFX = spell->m_pSpellFx;
-				if(pCSpellFX) {
-					CFireBall * pCF = (CFireBall *)pCSpellFX;
-					float radius = std::max(m_level * 2.f, 12.f);
-					if(closerThan(target, pCF->eCurPos,
-					              fPerimeter + radius)) {
-						spell->m_level -= m_level;
-						if(spell->m_level < 1) {
-							spells.endSpell(spell);
-						}
+				Vec3f pos = spell->getPosition();
+				float radius = std::max(m_level * 2.f, 12.f);
+				if(closerThan(target, pos, fPerimeter + radius)) {
+					spell->m_level -= m_level;
+					if(spell->m_level < 1) {
+						spells.endSpell(spell);
 					}
 				}
 				break;
 			}
 			
 			case SPELL_FIRE_FIELD: {
-				Vec3f pos;
-				if(GetSpellPosition(&pos, spell)) {
-					if(closerThan(target, pos, fPerimeter + 200)) {
-						spell->m_level -= m_level;
-						if(spell->m_level < 1) {
-							spells.endSpell(spell);
-						}
+				Vec3f pos = spell->getPosition();
+				if(closerThan(target, pos, fPerimeter + 200)) {
+					spell->m_level -= m_level;
+					if(spell->m_level < 1) {
+						spells.endSpell(spell);
 					}
 				}
 				break;

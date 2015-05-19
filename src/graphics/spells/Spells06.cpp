@@ -577,17 +577,19 @@ void CRiseDead::AddStone(Vec3f * pos) {
 	
 	int nb = 256;
 	while(nb--) {
-		if(!tstone[nb].actif) {
+		T_STONE & s = tstone[nb];
+		
+		if(!s.actif) {
 			nbstone++;
-			tstone[nb].actif = 1;
-			tstone[nb].numstone = rand() & 1;
-			tstone[nb].pos = *pos;
-			tstone[nb].yvel = rnd() * -5.f;
-			tstone[nb].ang = Anglef(rnd() * 360.f, rnd() * 360.f, rnd() * 360.f);
-			tstone[nb].angvel = Anglef(5.f * rnd(), 6.f * rnd(), 3.f * rnd());
-			tstone[nb].scale = Vec3f(0.2f + rnd() * 0.3f);
-			tstone[nb].time = Random::get(2000, 2500);
-			tstone[nb].currtime = 0;
+			s.actif = 1;
+			s.numstone = rand() & 1;
+			s.pos = *pos;
+			s.yvel = rnd() * -5.f;
+			s.ang = Anglef(rnd(), rnd(), rnd()) * Anglef(360.f, 360.f, 360.f);
+			s.angvel = Anglef(rnd(), rnd(), rnd()) * Anglef(5.f, 6.f, 3.f);
+			s.scale = Vec3f(0.2f + rnd() * 0.3f);
+			s.time = Random::get(2000, 2500);
+			s.currtime = 0;
 			break;
 		}
 	}
@@ -602,20 +604,22 @@ void CRiseDead::DrawStone()
 	mat.setBlendType(RenderMaterial::Screen);
 	
 	while(nb--) {
-		if(this->tstone[nb].actif) {
-			float a = (float)this->tstone[nb].currtime / (float)this->tstone[nb].time;
+		T_STONE & s = tstone[nb];
+		
+		if(s.actif) {
+			float a = (float)s.currtime / (float)s.time;
 
 			if(a > 1.f) {
 				a = 1.f;
-				this->tstone[nb].actif = 0;
+				s.actif = 0;
 			}
 
 			Color4f col = Color4f(Color3f::white, 1.f - a);
-			Draw3DObject(stone[tstone[nb].numstone], tstone[nb].ang, tstone[nb].pos, tstone[nb].scale, col, mat);
+			Draw3DObject(stone[s.numstone], s.ang, s.pos, s.scale, col, mat);
 			
 			PARTICLE_DEF * pd = createParticle();
 			if(pd) {
-				pd->ov = tstone[nb].pos;
+				pd->ov = s.pos;
 				pd->move = Vec3f(0.f, 3.f * rnd(), 0.f);
 				pd->siz = 3.f + 3.f * rnd();
 				pd->tolive = 1000;
@@ -627,13 +631,13 @@ void CRiseDead::DrawStone()
 			
 			//update mvt
 			if(!arxtime.is_paused()) {
-				a = (((float)this->currframetime) * 100.f) / (float)this->tstone[nb].time;
-				tstone[nb].pos.y += tstone[nb].yvel * a;
-				tstone[nb].ang += tstone[nb].angvel * a;
+				a = (((float)this->currframetime) * 100.f) / (float)s.time;
+				s.pos.y += s.yvel * a;
+				s.ang += s.angvel * a;
 
-				this->tstone[nb].yvel *= 1.f - (1.f / 100.f);
+				s.yvel *= 1.f - (1.f / 100.f);
 
-				this->tstone[nb].currtime += this->currframetime;
+				s.currtime += this->currframetime;
 			}
 		}
 	}

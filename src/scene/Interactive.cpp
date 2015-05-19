@@ -386,7 +386,7 @@ void IO_UnlinkAllLinkedObjects(Entity * io) {
 			continue;
 		}
 		
-		linked->angle = Anglef(rnd() * 40.f + 340.f, rnd() * 360.f, 0.f);
+		linked->angle = Anglef(rnd(), rnd(), 0.f) * Anglef(40.f, 360.f, 0.f) + Anglef(340.f, 0.f, 0.f);
 		linked->soundtime = 0;
 		linked->soundcount = 0;
 		linked->gameFlags |= GFLAG_NO_PHYS_IO_COL;
@@ -756,7 +756,6 @@ static void ARX_INTERACTIVE_ClearIODynData(Entity * io) {
 		return;
 	
 	lightHandleDestroy(io->dynlight);
-	lightHandleDestroy(io->halo.dynlight);
 	
 	delete io->symboldraw;
 	io->symboldraw = NULL;
@@ -886,7 +885,6 @@ void RestoreInitialIOStatusOfIO(Entity * io)
 		io->halo_native.flags = 0;
 
 		ARX_HALO_SetToNative(io);
-		io->halo.dynlight = LightHandle::Invalid;
 
 		io->forcedmove = Vec3f_ZERO;
 		io->ioflags &= ~IO_NO_COLLISIONS;
@@ -1021,7 +1019,6 @@ void RestoreInitialIOStatusOfIO(Entity * io)
 		else io->collision = 0;
 
 		if(io->ioflags & IO_FIX) {
-			memset(io->_fixdata, 0, sizeof(IO_FIXDATA));
 			io->_fixdata->trapvalue = -1;
 		}
 	}
@@ -1433,8 +1430,7 @@ Entity * AddFix(const res::path & classPath, EntityInstance instance, AddInterac
 	
 	Entity * io = new Entity(classPath, instance);
 	
-	io->_fixdata = (IO_FIXDATA *)malloc(sizeof(IO_FIXDATA));
-	memset(io->_fixdata, 0, sizeof(IO_FIXDATA));
+	io->_fixdata = new IO_FIXDATA;
 	io->ioflags = IO_FIX;
 	io->_fixdata->trapvalue = -1;
 	

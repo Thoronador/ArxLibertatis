@@ -84,6 +84,10 @@ void SpeedSpell::Update(float timeDelta)
 	}
 }
 
+Vec3f SpeedSpell::getPosition() {
+	return getTargetPosition();
+}
+
 void DispellIllusionSpell::Launch()
 {
 	ARX_SOUND_PlaySFX(SND_SPELL_DISPELL_ILLUSION);
@@ -298,6 +302,17 @@ void FireballSpell::Update(float timeDelta)
 	
 	ARX_SOUND_RefreshPosition(m_snd_loop, effect->eCurPos);
 }
+
+Vec3f FireballSpell::getPosition() {
+	
+	if(m_pSpellFx) {
+		CFireBall * pCF = (CFireBall *)m_pSpellFx;
+		return pCF->eCurPos;
+	} else {
+		return Vec3f_ZERO;
+	}
+}
+
 
 void CreateFoodSpell::Launch()
 {

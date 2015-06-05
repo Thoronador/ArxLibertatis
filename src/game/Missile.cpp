@@ -62,6 +62,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "math/Vector.h"
 
 #include "platform/Flags.h"
+#include "platform/profiler/Profiler.h"
 
 #include "scene/Light.h"
 #include "scene/Interactive.h"
@@ -127,7 +128,7 @@ void ARX_MISSILES_ClearAll() {
 
 //-----------------------------------------------------------------------------
 // Spawns a Projectile using type, starting position/TargetPosition
-void ARX_MISSILES_Spawn(Entity * io, ARX_SPELLS_MISSILE_TYPE type, const Vec3f * startpos, const Vec3f * targetpos) {
+void ARX_MISSILES_Spawn(Entity * io, ARX_SPELLS_MISSILE_TYPE type, const Vec3f & startpos, const Vec3f & targetpos) {
 	
 	long i(ARX_MISSILES_GetFree());
 
@@ -135,12 +136,12 @@ void ARX_MISSILES_Spawn(Entity * io, ARX_SPELLS_MISSILE_TYPE type, const Vec3f *
 
 	missiles[i].owner = (io == NULL) ? EntityHandle::Invalid : io->index();
 	missiles[i].type = type;
-	missiles[i].lastpos = missiles[i].startpos = *startpos;
+	missiles[i].lastpos = missiles[i].startpos = startpos;
 
 	float dist;
 
-	dist = 1.0F / fdist(*startpos, *targetpos);
-	missiles[i].velocity = (*targetpos - *startpos) * dist;
+	dist = 1.0F / fdist(startpos, targetpos);
+	missiles[i].velocity = (targetpos - startpos) * dist;
 	missiles[i].lastupdate = missiles[i].timecreation = (unsigned long)(arxtime);
 
 	switch (type)
@@ -159,7 +160,7 @@ void ARX_MISSILES_Spawn(Entity * io, ARX_SPELLS_MISSILE_TYPE type, const Vec3f *
 				light->fallend = 420.f;
 				light->fallstart = 250.f;
 				light->rgb = Color3f(1.f, .8f, .6f);
-				light->pos = *startpos;
+				light->pos = startpos;
 			}
 
 			ARX_SOUND_PlaySFX(SND_SPELL_FIRE_WIND, &missiles[i].startpos, 2.0F);
@@ -172,8 +173,10 @@ extern TextureContainer * TC_fire;
 
 //-----------------------------------------------------------------------------
 // Updates all currently launched projectiles
-void ARX_MISSILES_Update()
-{
+void ARX_MISSILES_Update() {
+	
+	ARX_PROFILE_FUNC();
+	
 	TextureContainer * tc = TC_fire; 
 
 	unsigned long tim = (unsigned long)(arxtime);
@@ -255,7 +258,7 @@ void ARX_MISSILES_Update()
 					break;
 				}
 
-				long ici = IsCollidingAnyInter(dest, &tro);
+				long ici = IsCollidingAnyInter(dest, tro);
 
 				if(ici != -1 && ici != missiles[i].owner) {
 					ARX_MISSILES_Kill(i);

@@ -58,13 +58,6 @@ class CLightning : public CSpellFx {
 public:
 	CLightning();
 	
-	void SetColor(long, long);
-	void SetPosSrc(Vec3f);
-	void SetPosDest(Vec3f);
-
-	void SetColor1(float, float, float);
-	void SetColor2(float, float, float);
-
 	void Create(Vec3f, Vec3f);
 	void Update(float timeDelta);
 	void Render();
@@ -75,24 +68,24 @@ public:
 	EntityHandle m_caster;
 	float m_level;
 	
-	float	fDamage;
+	float	m_fDamage;
 	bool m_isMassLightning;
 	
 private:
-	size_t nbtotal;
-	long	lNbSegments;
-	float	fColor1[3];
-	float	fColor2[3];
-	float	invNbSegments;
-	float	fSize;
-	float	fLengthMin;
-	float	fLengthMax;
-	Vec3f fAngleMin;
-	Vec3f fAngleMax;
-	Vec3f eSrc;
-	Vec3f eDest;
-	TextureContainer * tex_light;
-	int iTTL;
+	float fTotoro;
+	float fMySize;
+	size_t m_nbtotal;
+	long m_lNbSegments;
+	float m_invNbSegments;
+	float m_fSize;
+	float m_fLengthMin;
+	float m_fLengthMax;
+	Vec3f m_fAngleMin;
+	Vec3f m_fAngleMax;
+	Vec3f m_eSrc;
+	Vec3f m_eDest;
+	TextureContainer * m_tex_light;
+	int m_iTTL;
 	
 	struct CLightningNode {
 		Vec3f pos;
@@ -103,73 +96,11 @@ private:
 	
 	static const size_t MAX_NODES = 2000;
 	
-	CLightningNode	cnodetab[MAX_NODES];
+	CLightningNode	m_cnodetab[MAX_NODES];
 	
 	struct LIGHTNING;
 	void BuildS(LIGHTNING * lightingInfo);
 	void ReCreate(float rootSize);
-};
-
-// Done By : Didier Pedreno
-class CConfuse : public CSpellFx {
-	
-public:
-	CConfuse();
-	~CConfuse();
-	
-	void Create();
-	void SetPos(const Vec3f & pos);
-	
-	void Update(float timeDelta);
-	void Render();
-	
-private:
-	TextureContainer * tex_p1;
-	TextureContainer * tex_trail;
-	ANIM_USE au;
-	Vec3f eCurPos;
-};
-
-class CFireField : public CSpellFx {
-	
-public:
-	CFireField();
-	~CFireField();
-
-	void Create(float largeur, const Vec3f & pos, int duration);
-	void Update(float timeDelta);
-	void Render();
-	
-	Vec3f pos;
-	
-private:
-	ParticleSystem pPSStream;
-	ParticleSystem pPSStream1;
-};
-
-// Done By : did
-class CIceField : public CSpellFx {
-	
-public:
-	CIceField();
-	~CIceField();
-	
-	void Create(Vec3f);
-	void Update(float timeDelta);
-	void Render();
-	
-	Vec3f eSrc;
-	
-private:
-	Vec3f eTarget;
-	TextureContainer * tex_p1;
-	TextureContainer * tex_p2;
-	
-	int iMax;
-	int tType[50];
-	Vec3f tPos[50];
-	Vec3f tSize[50];
-	Vec3f tSizeMax[50];
 };
 
 #endif // ARX_GRAPHICS_SPELLS_SPELLS07_H

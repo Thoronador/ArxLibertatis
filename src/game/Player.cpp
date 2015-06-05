@@ -233,14 +233,13 @@ void ARX_KEYRING_Combine(Entity * io) {
 }
 
 /*!
- * \brief Fills "pos" with player "front pos" for sound purpose
- * \param pos
+ * \return player "front pos" for sound purpose
  */
-void ARX_PLAYER_FrontPos(Vec3f * pos)
-{
-	*pos = player.pos;
-	*pos += angleToVectorXZ(player.angle.getPitch()) * 100.f;
-	*pos += Vec3f(0.f, 100.f, 0.f); // XXX use -100 here ?
+Vec3f ARX_PLAYER_FrontPos() {
+	Vec3f pos = player.pos;
+	pos += angleToVectorXZ(player.angle.getPitch()) * 100.f;
+	pos += Vec3f(0.f, 100.f, 0.f); // XXX use -100 here ?
+	return pos;
 }
 
 /*!
@@ -1795,6 +1794,7 @@ void ARX_PLAYER_InitPlayer() {
 	player.gold = 0;
 	player.bag = 1;
 	player.doingmagic = 0;
+	
 	ARX_PLAYER_MakeFreshHero();
 }
 
@@ -2232,9 +2232,8 @@ void PlayerMovementIterate(float DeltaTime) {
 				} else if(levitate && !player.climbing) {
 					scale = 0.875f / 1000;
 				} else {
-					Vec3f mv;
 					short idx = entities.player()->animlayer[0].altidx_cur;
-					GetAnimTotalTranslate(entities.player()->animlayer[0].cur_anim, idx, &mv);
+					Vec3f mv = GetAnimTotalTranslate(entities.player()->animlayer[0].cur_anim, idx);
 					float time = entities.player()->animlayer[0].cur_anim->anims[idx]->anim_time;
 					scale = glm::length(mv) / time * 0.0125f;
 				}
@@ -2288,7 +2287,7 @@ void PlayerMovementIterate(float DeltaTime) {
 					ARX_DAMAGES_DamagePlayerEquipment(damages);
 
 					Vec3f pos = player.basePosition();
-					ARX_PARTICLES_Spawn_Lava_Burn(&pos, entities.player());
+					ARX_PARTICLES_Spawn_Lava_Burn(pos, entities.player());
 				}
 			}
 		}

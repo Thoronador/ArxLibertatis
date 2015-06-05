@@ -66,6 +66,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "math/Random.h"
 
 #include "platform/Platform.h"
+#include "platform/profiler/Profiler.h"
 
 #include "scene/GameSound.h"
 
@@ -126,11 +127,11 @@ long ARX_PATH_IsPosInZone(ARX_PATH * ap, Vec3f pos)
 	ARX_PATHWAY * app = ap->pathways;
 
 	for(i = 0, j = ap->nb_pathways - 1; i < ap->nb_pathways; j = i++) {
-		Vec3f * pi = &app[i].rpos;
-		Vec3f * pj = &app[j].rpos;
+		const Vec3f & pi = app[i].rpos;
+		const Vec3f & pj = app[j].rpos;
 
-		if(((pi->z <= pos.z && pos.z < pj->z) || (pj->z <= pos.z && pos.z < pi->z))
-		   && (pos.x < (pj->x - pi->x) *(pos.z - pi->z) / (pj->z - pi->z) + pi->x)
+		if(((pi.z <= pos.z && pos.z < pj.z) || (pj.z <= pos.z && pos.z < pi.z))
+		   && (pos.x < (pj.x - pi.x) *(pos.z - pi.z) / (pj.z - pi.z) + pi.x)
 		) {
 			c = !c;
 		}
@@ -171,6 +172,8 @@ static ARX_PATH * ARX_PATH_CheckPlayerInZone() {
 long JUST_RELOADED = 0;
 
 void ARX_PATH_UpdateAllZoneInOutInside() {
+	
+	ARX_PROFILE_FUNC();
 	
 	arx_assert(entities.player());
 	

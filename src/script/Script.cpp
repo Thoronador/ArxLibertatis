@@ -229,6 +229,8 @@ void ARX_SCRIPT_ResetAll(bool init) {
 
 void ARX_SCRIPT_AllowInterScriptExec() {
 	
+	ARX_PROFILE_FUNC();
+	
 	// FIXME static local variable
 	static long ppos = 0;
 	
@@ -910,7 +912,7 @@ ValueType getSystemVar(const EERIE_SCRIPT * es, Entity * entity, const std::stri
 						return TYPE_LONG;
 					}
 					for(long i = 0; i < MAX_EQUIPED; i++) {
-						if(player.equiped[i] == t) {
+						if(ValidIONum(player.equiped[i]) && player.equiped[i] == t) {
 							*lcontent = 2;
 							return TYPE_LONG;
 						}
@@ -1501,6 +1503,8 @@ void ARX_SCRIPT_EventStackClearForIo(Entity * io) {
 
 void ARX_SCRIPT_EventStackExecute(size_t limit) {
 	
+	ARX_PROFILE_FUNC();
+	
 	size_t count = 0;
 	
 	BOOST_FOREACH(QueuedEvent & event, g_eventQueue) {
@@ -1782,7 +1786,7 @@ long ARX_SCRIPT_GetSystemIOScript(Entity * io, const std::string & name) {
 	return -1;
 }
 
-static long Manage_Specific_RAT_Timer(SCR_TIMER * st) {
+static bool Manage_Specific_RAT_Timer(SCR_TIMER * st) {
 	
 	Entity * io = st->io;
 	GetTargetPos(io);
@@ -1790,39 +1794,33 @@ static long Manage_Specific_RAT_Timer(SCR_TIMER * st) {
 	target = glm::normalize(target);
 	Vec3f targ = VRotateY(target, rnd() * 60.f - 30.f);
 	target = io->target + targ * 100.f;
-
-	if (ARX_INTERACTIVE_ConvertToValidPosForIO(io, &target))
-	{
+	
+	if(ARX_INTERACTIVE_ConvertToValidPosForIO(io, &target)) {
 		ARX_INTERACTIVE_Teleport(io, target);
 		Vec3f pos = io->pos;
 		pos.y += io->physics.cyl.height * ( 1.0f / 2 );
 		
-		ARX_PARTICLES_Add_Smoke(&pos, 3, 20);
+		ARX_PARTICLES_Add_Smoke(pos, 3, 20);
 		AddRandomSmoke(io, 20);
 		MakeCoolFx(io->pos);
 		io->show = SHOW_FLAG_IN_SCENE;
-
-		for (long kl = 0; kl < 10; kl++)
-		{
+		
+		for(long kl = 0; kl < 10; kl++) {
 			FaceTarget2(io);
 		}
-
+		
 		io->gameFlags &= ~GFLAG_INVISIBILITY;
 		st->times = 1;
-	}
-	else
-	{
+	} else {
 		st->times++;
-
 		st->msecs = static_cast<long>(st->msecs * ( 1.0f / 2 ));
-
-
-		if (st->msecs < 100) st->msecs = 100;
-
-		return 1;
+		if(st->msecs < 100)
+			st->msecs = 100;
+		
+		return true;
 	}
-
-	return 0;
+	
+	return false;
 }
 
 void ARX_SCRIPT_Timer_Check() {

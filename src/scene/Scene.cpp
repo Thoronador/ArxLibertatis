@@ -198,10 +198,10 @@ Vec2f getWaterFxUvOffset(const Vec3f & odtv, float power)
 				 std::cos(WATEREFFECT + odtv.z) * power);
 }
 
-static void ApplyLavaGlowToVertex(Vec3f * odtv,TexturedVertex * dtv, float power) {
+static void ApplyLavaGlowToVertex(const Vec3f & odtv,TexturedVertex * dtv, float power) {
 	float f;
 	long lr, lg, lb;
-	power = 1.f - std::sin(WATEREFFECT + odtv->x + odtv->z) * 0.05f * power;
+	power = 1.f - std::sin(WATEREFFECT + odtv.x + odtv.z) * 0.05f * power;
 	Color inColor = Color::fromRGBA(dtv->color);
 	f = inColor.r * power;
 	lr = clipByte(f);
@@ -238,7 +238,7 @@ static void ManageLava_VertexBuffer(EERIEPOLY * ep, const long to,
 		ep->tv[k].uv = ep->v[k].uv;
 		
 		ep->tv[k].uv += getWaterFxUvOffset(ep->v[k].p, 0.35f); //0.25f
-		ApplyLavaGlowToVertex(&ep->v[k].p, &ep->tv[k], 0.6f);
+		ApplyLavaGlowToVertex(ep->v[k].p, &ep->tv[k], 0.6f);
 			
 		if(ep->type & POLY_FALL) {
 			ep->tv[k].uv.y -= (float)(tim) * (1.f/12000);
@@ -277,19 +277,14 @@ static bool FrustrumsClipSphere(const EERIE_FRUSTRUM_DATA & frustrums,
 	return true;
 }
 
-bool VisibleSphere(const Vec3f & pos, float radius) {
+bool VisibleSphere(const Sphere & sphere) {
 	
-	if(fartherThan(pos, ACTIVECAM->orgTrans.pos, ACTIVECAM->cdepth*0.5f + radius))
+	if(fartherThan(sphere.origin, ACTIVECAM->orgTrans.pos, ACTIVECAM->cdepth*0.5f + sphere.radius))
 		return false;
 
-	long room_num = ARX_PORTALS_GetRoomNumForPosition(pos);
+	long room_num = ARX_PORTALS_GetRoomNumForPosition(sphere.origin);
 
-	if (room_num>=0)
-	{
-		Sphere sphere;
-		sphere.origin = pos;
-		sphere.radius = radius;
-							
+	if(room_num>=0) {
 		EERIE_FRUSTRUM_DATA & frustrums = RoomDraw[room_num].frustrum;
 
 		if (FrustrumsClipSphere(frustrums, sphere))

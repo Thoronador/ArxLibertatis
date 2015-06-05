@@ -212,9 +212,9 @@ void ARX_INTERACTIVE_DestroyDynamicInfo(Entity * io)
 	ARX_INTERACTIVE_ForceIOLeaveZone(io, 0);
 
 	for(long i = 0; i < MAX_EQUIPED; i++) {
-		if(player.equiped[i] && player.equiped[i] == n && ValidIONum(player.equiped[i])) {
+		if(player.equiped[i] == n && ValidIONum(player.equiped[i])) {
 			ARX_EQUIPMENT_UnEquip(entities.player(), entities[player.equiped[i]], 1);
-			player.equiped[i] = EntityHandle(0); // TODO inband signaling
+			player.equiped[i] = EntityHandle::Invalid;
 		}
 	}
 	
@@ -501,7 +501,7 @@ void PrepareIOTreatZone(long flag) {
 	short sGlobalPlayerRoom = checked_range_cast<short>(PlayerRoom);
 
 	for(long i = 0; i < MAX_EQUIPED; i++) {
-		if(player.equiped[i] != PlayerEntityHandle && ValidIONum(player.equiped[i])) {
+		if(ValidIONum(player.equiped[i])) {
 			Entity *toequip = entities[player.equiped[i]];
 
 			if(toequip) {
@@ -878,9 +878,7 @@ void RestoreInitialIOStatusOfIO(Entity * io)
 
 		ARX_INTERACTIVE_HideGore(io, 1);
 
-		io->halo_native.color.r = 0.2f;
-		io->halo_native.color.g = 0.5f;
-		io->halo_native.color.b = 1.f;
+		io->halo_native.color = Color3f(0.2f, 0.5f, 1.f);
 		io->halo_native.radius = 45.f;
 		io->halo_native.flags = 0;
 
@@ -959,7 +957,7 @@ void RestoreInitialIOStatusOfIO(Entity * io)
 		io->show = SHOW_FLAG_IN_SCENE;
 		io->targetinfo = EntityHandle(TARGET_NONE);
 		io->spellcast_data.castingspell = SPELL_NONE;
-		io->summoner = -1;
+		io->summoner = EntityHandle::Invalid;
 		io->spark_n_blood = 0;
 
 		if(io->ioflags & IO_NPC) {
@@ -990,9 +988,7 @@ void RestoreInitialIOStatusOfIO(Entity * io)
 			io->_npcdata->manaPool.max = 10.f;
 			io->_npcdata->manaPool.current = io->_npcdata->manaPool.max;
 			io->_npcdata->critical = 5.f;
-			io->infracolor.r = 1.f;
-			io->infracolor.g = 0.f;
-			io->infracolor.b = 0.2f;
+			io->infracolor = Color3f(1.f, 0.f, 0.2f);
 			io->_npcdata->detect = 0;
 			io->_npcdata->movemode = WALKMODE;
 			io->_npcdata->reach = 20.f;
@@ -1163,14 +1159,14 @@ void ARX_INTERACTIVE_TeleportBehindTarget(Entity * io)
 			scr_timer[num].times = 1;
 			entities[t]->show = SHOW_FLAG_TELEPORTING;
 			AddRandomSmoke(io, 10);
-			ARX_PARTICLES_Add_Smoke(&io->pos, 3, 20);
+			ARX_PARTICLES_Add_Smoke(io->pos, 3, 20);
 			Vec3f pos;
 			pos.x = entities[t]->pos.x;
 			pos.y = entities[t]->pos.y + entities[t]->physics.cyl.height * ( 1.0f / 2 );
 			pos.z = entities[t]->pos.z;
 			io->requestRoomUpdate = true;
 			io->room = -1;
-			ARX_PARTICLES_Add_Smoke(&pos, 3, 20);
+			ARX_PARTICLES_Add_Smoke(pos, 3, 20);
 			MakeCoolFx(io->pos);
 			io->gameFlags |= GFLAG_INVISIBILITY;
 		}
@@ -1829,9 +1825,7 @@ Entity * AddItem(const res::path & classPath_, EntityInstance instance, AddInter
 		io->inv = tc;
 	}
 
-	io->infracolor.r = 0.2f;
-	io->infracolor.g = 0.2f;
-	io->infracolor.b = 1.f;
+	io->infracolor = Color3f(0.2f, 0.2f, 1.f);
 	io->collision = 0;
 
 	return io;
@@ -1989,7 +1983,7 @@ bool IsEquipedByPlayer(const Entity * io)
 	EntityHandle num = io->index();
 
 	for(long i = 0; i < MAX_EQUIPED; i++) {
-		if(player.equiped[i] != PlayerEntityHandle && player.equiped[i] == num)
+		if(ValidIONum(player.equiped[i]) && player.equiped[i] == num)
 			return true;
 	}
 
@@ -2028,7 +2022,7 @@ Entity * InterClick(const Vec2s & pos) {
 }
 
 // Need To upgrade to a more precise collision.
-long IsCollidingAnyInter(const Vec3f & pos, Vec3f * size) {
+long IsCollidingAnyInter(const Vec3f & pos, const Vec3f & size) {
 	
 	for(size_t i = 0; i < entities.size(); i++) {
 		const EntityHandle handle = EntityHandle(i);
@@ -2047,7 +2041,7 @@ long IsCollidingAnyInter(const Vec3f & pos, Vec3f * size) {
 			if(IsCollidingInter(io, tempPos))
 				return i;
 
-			tempPos.y += size->y;
+			tempPos.y += size.y;
 
 			if(IsCollidingInter(io, tempPos))
 				return i;
@@ -2130,7 +2124,7 @@ bool ARX_INTERACTIVE_CheckFULLCollision(PHYSICS_BOX_DATA * pbox, EntityHandle so
 
 		if((io->ioflags & IO_NPC) && io->_npcdata->lifePool.current > 0.f) {
 			for(long kk = 0; kk < pbox->nb_physvert; kk++)
-				if(PointInCylinder(io->physics.cyl, &pbox->vert[kk].pos))
+				if(PointInCylinder(io->physics.cyl, pbox->vert[kk].pos))
 					return true;
 		} else if(io->ioflags & IO_FIX) {
 			long step;

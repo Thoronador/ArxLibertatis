@@ -809,7 +809,7 @@ bool ArxGame::initGame()
 	
 	entities.init();
 	
-	memset(&player,0,sizeof(ARXCHARACTER));
+	player = ARXCHARACTER();
 	ARX_PLAYER_InitPlayer();
 	
 	CleanInventory();
@@ -935,8 +935,7 @@ bool ArxGame::initGame()
 	drawDebugInitialize();
 
 	FlyingEye_Init();
-	
-	cabal = LoadTheObj("editor/obj3d/cabal.teo", "cabal_teo maps");
+	LoadSpellModels();
 	
 	cameraobj = loadObject("graph/obj3d/interactive/system/camera/camera.teo");
 	markerobj = loadObject("graph/obj3d/interactive/system/marker/marker.teo");
@@ -1081,8 +1080,8 @@ static void ReleaseSystemObjects() {
 	}
 	
 	FlyingEye_Release();
-
-	delete cabal, cabal = NULL;
+	ReleaseSpellModels();
+	
 	delete cameraobj, cameraobj = NULL;
 	delete markerobj, markerobj = NULL;
 	delete arrowobj, arrowobj = NULL;
@@ -1399,8 +1398,9 @@ void ArxGame::speechControlledCinematic() {
 	}
 
 	if(valid >= 0) {
-		CinematicSpeech * acs=&aspeech[valid].cine;
-		Entity * io=aspeech[valid].io;
+		const CinematicSpeech & acs = aspeech[valid].cine;
+		const Entity * io = aspeech[valid].io;
+		
 		float rtime=(float)(arxtime.get_updated()-aspeech[valid].time_creation)/(float)aspeech[valid].duration;
 
 		rtime = glm::clamp(rtime, 0.f, 1.f);
@@ -1408,21 +1408,21 @@ void ArxGame::speechControlledCinematic() {
 		float itime=1.f-rtime;
 
 		if(rtime >= 0.f && rtime <= 1.f && io) {
-			switch(acs->type) {
+			switch(acs.type) {
 			case ARX_CINE_SPEECH_KEEP: {
-				subj.orgTrans.pos = acs->pos1;
-				subj.angle.setYaw(acs->pos2.x);
-				subj.angle.setPitch(acs->pos2.y);
-				subj.angle.setRoll(acs->pos2.z);
+				subj.orgTrans.pos = acs.pos1;
+				subj.angle.setYaw(acs.pos2.x);
+				subj.angle.setPitch(acs.pos2.y);
+				subj.angle.setRoll(acs.pos2.z);
 				EXTERNALVIEW = true;
 				break;
 									   }
 			case ARX_CINE_SPEECH_ZOOM: {
 				//need to compute current values
-				float alpha = acs->startangle.getYaw() * itime + acs->endangle.getYaw() * rtime;
-				float beta = acs->startangle.getPitch() * itime + acs->endangle.getPitch() * rtime;
-				float distance = acs->startpos * itime + acs->endpos * rtime;
-				Vec3f targetpos = acs->pos1;
+				float alpha = acs.startangle.getYaw() * itime + acs.endangle.getYaw() * rtime;
+				float beta = acs.startangle.getPitch() * itime + acs.endangle.getPitch() * rtime;
+				float distance = acs.startpos * itime + acs.endpos * rtime;
+				Vec3f targetpos = acs.pos1;
 				
 				conversationcamera.orgTrans.pos = angleToVectorXZ(io->angle.getPitch() + beta) * distance;
 				conversationcamera.orgTrans.pos.y = std::sin(glm::radians(MAKEANGLE(io->angle.getYaw() + alpha))) * distance;
@@ -1438,28 +1438,28 @@ void ArxGame::speechControlledCinematic() {
 									   }
 			case ARX_CINE_SPEECH_SIDE_LEFT:
 			case ARX_CINE_SPEECH_SIDE: {
-				if(ValidIONum(acs->ionum)) {
-					const Vec3f & from = acs->pos1;
-					const Vec3f & to = acs->pos2;
+				if(ValidIONum(acs.ionum)) {
+					const Vec3f & from = acs.pos1;
+					const Vec3f & to = acs.pos2;
 
 					Vec3f vect = glm::normalize(to - from);
 
 					Vec3f vect2;
-					if(acs->type==ARX_CINE_SPEECH_SIDE_LEFT) {
+					if(acs.type==ARX_CINE_SPEECH_SIDE_LEFT) {
 						vect2 = VRotateY(vect, -90.f);
 					} else {
 						vect2 = VRotateY(vect, 90.f);
 					}
 
-					float distance=acs->m_startdist*itime+acs->m_enddist*rtime;
+					float distance=acs.m_startdist*itime+acs.m_enddist*rtime;
 					vect2 *= distance;
 					float _dist = glm::distance(from, to);
-					Vec3f tfrom = from + vect * acs->startpos * (1.0f / 100) * _dist;
-					Vec3f tto = from + vect * acs->endpos * (1.0f / 100) * _dist;
+					Vec3f tfrom = from + vect * acs.startpos * (1.0f / 100) * _dist;
+					Vec3f tto = from + vect * acs.endpos * (1.0f / 100) * _dist;
 					
-					Vec3f targetpos = tfrom * itime + tto * rtime + Vec3f(0.f, acs->m_heightModifier, 0.f);
+					Vec3f targetpos = tfrom * itime + tto * rtime + Vec3f(0.f, acs.m_heightModifier, 0.f);
 
-					conversationcamera.orgTrans.pos = targetpos + vect2 + Vec3f(0.f, acs->m_heightModifier, 0.f);
+					conversationcamera.orgTrans.pos = targetpos + vect2 + Vec3f(0.f, acs.m_heightModifier, 0.f);
 					conversationcamera.setTargetCamera(targetpos);
 					subj.orgTrans.pos = conversationcamera.orgTrans.pos;
 					subj.angle.setYaw(MAKEANGLE(-conversationcamera.angle.getYaw()));
@@ -1475,18 +1475,18 @@ void ArxGame::speechControlledCinematic() {
 			case ARX_CINE_SPEECH_CCCTALKER_R:
 			case ARX_CINE_SPEECH_CCCTALKER_L: {
 				//need to compute current values
-				if(ValidIONum(acs->ionum)) {
+				if(ValidIONum(acs.ionum)) {
 					Vec3f targetpos;
-					if(acs->type == ARX_CINE_SPEECH_CCCLISTENER_L
-						 || acs->type == ARX_CINE_SPEECH_CCCLISTENER_R) {
-						conversationcamera.orgTrans.pos = acs->pos2;
-						targetpos = acs->pos1;
+					if(acs.type == ARX_CINE_SPEECH_CCCLISTENER_L
+						 || acs.type == ARX_CINE_SPEECH_CCCLISTENER_R) {
+						conversationcamera.orgTrans.pos = acs.pos2;
+						targetpos = acs.pos1;
 					} else {
-						conversationcamera.orgTrans.pos = acs->pos1;
-						targetpos = acs->pos2;
+						conversationcamera.orgTrans.pos = acs.pos1;
+						targetpos = acs.pos2;
 					}
 
-					float distance = (acs->startpos * itime + acs->endpos * rtime) * (1.0f/100);
+					float distance = (acs.startpos * itime + acs.endpos * rtime) * (1.0f/100);
 
 					Vec3f vect = conversationcamera.orgTrans.pos - targetpos;
 					Vec3f vect2 = VRotateY(vect, 90.f);;
@@ -1497,8 +1497,8 @@ void ArxGame::speechControlledCinematic() {
 					vect = vect * distance + vect3 * 80.f;
 					vect2 *= 45.f;
 
-					if ((acs->type==ARX_CINE_SPEECH_CCCLISTENER_R)
-						|| (acs->type==ARX_CINE_SPEECH_CCCTALKER_R))
+					if ((acs.type==ARX_CINE_SPEECH_CCCLISTENER_R)
+						|| (acs.type==ARX_CINE_SPEECH_CCCTALKER_R))
 					{
 						vect2 = -vect2;
 					}
@@ -1830,7 +1830,7 @@ void ArxGame::updateLevel() {
 	PrepareIOTreatZone();
 	ARX_PHYSICS_Apply();
 
-	PrecalcIOLighting(&ACTIVECAM->orgTrans.pos, ACTIVECAM->cdepth * 0.6f);
+	PrecalcIOLighting(ACTIVECAM->orgTrans.pos, ACTIVECAM->cdepth * 0.6f);
 
 	ACTIVECAM->fadecolor = current.depthcolor;
 
@@ -2015,7 +2015,6 @@ void ArxGame::renderLevel() {
 
 	// Speech Management
 	ARX_SPEECH_Check();
-	ARX_SPEECH_Update();
 
 	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapRepeat);
 
@@ -2061,6 +2060,11 @@ void ArxGame::renderLevel() {
 
 	if(FADEDIR)
 		ManageFade();
+	
+	GRenderer->SetScissor(Rect::ZERO);
+	
+	ARX_SPEECH_Update();
+	
 }
 
 void ArxGame::update() {	
@@ -2147,12 +2151,10 @@ void ArxGame::render() {
 	} else {
 		updateLevel();
 		
-#ifdef ARX_DEBUG
 		if(g_debugToggles[7])
-			setHudScale(3);
+			setHudScale(2);
 		else
 			setHudScale(1);
-#endif
 		
 		renderLevel();
 

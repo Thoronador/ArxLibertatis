@@ -347,7 +347,7 @@ static void CheckExp(long i) {
 
 		ARX_BOOMS_Add(pos);
 		LaunchFireballBoom(pos, 10);
-		DoSphericDamage(pos, 4.f * 2, 50.f, DAMAGE_AREA, DAMAGE_TYPE_FIRE | DAMAGE_TYPE_MAGICAL, PlayerEntityHandle);
+		DoSphericDamage(Sphere(pos, 50.f), 4.f * 2, DAMAGE_AREA, DAMAGE_TYPE_FIRE | DAMAGE_TYPE_MAGICAL, PlayerEntityHandle);
 		ARX_SOUND_PlaySFX(SND_SPELL_FIRE_HIT, &pos);
 		ARX_NPC_SpawnAudibleSound(pos, entities.player());
 		LightHandle id = GetFreeDynLight();
@@ -475,7 +475,7 @@ void ARX_THROWN_OBJECT_Manage(unsigned long time_offset)
 			thrownObj->position.y += thrownObj->vector.y * mod + (time_offset * gmod);
 			thrownObj->position.z += thrownObj->vector.z * mod;
 
-			CheckForIgnition(original_pos, 10.f, 0, 2);
+			CheckForIgnition(Sphere(original_pos, 10.f), 0, 2);
 
 			Vec3f wpos = thrownObj->position;
 			wpos.y += 20.f;

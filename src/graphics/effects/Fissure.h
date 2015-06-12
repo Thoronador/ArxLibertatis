@@ -59,7 +59,6 @@ public:
 	
 	Vec3f m_eSrc;
 	
-	LightHandle lLightId;
 private:
 	float	fBetaRadCos;
 	float	fBetaRadSin;
@@ -96,7 +95,6 @@ public:
 	void Update(float timeDelta);
 	void Render();
 	
-	LightHandle lLightId;
 private:
 	float	fBetaRadCos;
 	float	fBetaRadSin;

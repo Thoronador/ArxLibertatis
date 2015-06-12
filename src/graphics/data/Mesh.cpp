@@ -193,24 +193,27 @@ EERIEPOLY * CheckInPoly(const Vec3f & poss, float * needY)
 	float rz = poss.z - ((float)pz * ACTIVEBKG->Zdiv);
 	
 	
-	short pzi, pza, pxi, pxa;
+	short minx;
+	short minz;
+	short maxx;
+	short maxz;
 	
 	(void)checked_range_cast<short>(pz - 1);
 	(void)checked_range_cast<short>(pz + 1);
 	short sPz = static_cast<short>(pz);
 	
 	if (rz < -40.f) {
-		pzi = sPz - 1;
-		pza = sPz - 1;
+		minz = sPz - 1;
+		maxz = sPz - 1;
 	} else if (rz < 40.f) {
-		pzi = sPz - 1;
-		pza = sPz;
+		minz = sPz - 1;
+		maxz = sPz;
 	} else if(rz > 60.f) {
-		pzi = sPz;
-		pza = sPz + 1;
+		minz = sPz;
+		maxz = sPz + 1;
 	} else {
-		pzi = sPz;
-		pza = sPz;
+		minz = sPz;
+		maxz = sPz;
 	}
 	
 	(void)checked_range_cast<short>(px + 1);
@@ -218,24 +221,24 @@ EERIEPOLY * CheckInPoly(const Vec3f & poss, float * needY)
 	short sPx = static_cast<short>(px);
 	
 	if(rx < -40.f) {
-		pxi = sPx - 1;
-		pxa = sPx - 1;
+		minx = sPx - 1;
+		maxx = sPx - 1;
 	} else if(rx < 40.f) {
-		pxi = sPx - 1;
-		pxa = sPx;
+		minx = sPx - 1;
+		maxx = sPx;
 	} else if(rx > 60.f) {
-		pxi = sPx;
-		pxa = sPx + 1;
+		minx = sPx;
+		maxx = sPx + 1;
 	} else {
-		pxi = sPx;
-		pxa = sPx;
+		minx = sPx;
+		maxx = sPx;
 	}
 	
 	EERIEPOLY * found = NULL;
 	float foundY = 0.f;
 	
-	for(short z = pzi; z <= pza; z++)
-	for(short x = pxi; x <= pxa; x++) {
+	for(short z = minz; z <= maxz; z++)
+	for(short x = minx; x <= maxx; x++) {
 		const EERIE_BKG_INFO & feg = ACTIVEBKG->fastdata[x][z];
 		
 		for(short k = 0; k < feg.nbpolyin; k++) {
@@ -802,8 +805,7 @@ bool Visible(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * epp, Vec3f * hi
 		i.x = d.x * t;
 		i.y = d.y * t;
 	}
-
-	float dd;
+	
 	tmpPos.x -= i.x;
 	tmpPos.y -= i.y;
 	tmpPos.z -= i.z;
@@ -825,12 +827,12 @@ bool Visible(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * epp, Vec3f * hi
 		for(long k = 0; k < eg->nbpolyin; k++) {
 			EERIEPOLY * ep = eg->polyin[k];
 
-			if (ep)
-			if ((ep->min.y - pas < tmpPos.y) && (ep->max.y + pas > tmpPos.y))
-			if ((ep->min.x - pas < tmpPos.x) && (ep->max.x + pas > tmpPos.x))
-			if ((ep->min.z - pas < tmpPos.z) && (ep->max.z + pas > tmpPos.z))
-			if (RayCollidingPoly(orgn, dest, ep, hit)) {
-				dd = fdist(orgn, *hit);
+			if(ep)
+			if((ep->min.y - pas < tmpPos.y) && (ep->max.y + pas > tmpPos.y))
+			if((ep->min.x - pas < tmpPos.x) && (ep->max.x + pas > tmpPos.x))
+			if((ep->min.z - pas < tmpPos.z) && (ep->max.z + pas > tmpPos.z))
+			if(RayCollidingPoly(orgn, dest, ep, hit)) {
+				float dd = fdist(orgn, *hit);
 
 				if(dd < nearest) {
 					nearest = dd;
@@ -1054,33 +1056,33 @@ static bool PointInBBox(const Vec3f & point, const EERIE_2D_BBOX & bb) {
 	return true;
 }
 
-void EERIEPOLY_Compute_PolyIn()
-{
-	for(long j = 0; j < ACTIVEBKG->Zsize; j++)
-	for(long i = 0; i < ACTIVEBKG->Xsize; i++) {
-		EERIE_BKG_INFO *eg = &ACTIVEBKG->fastdata[i][j];
+void EERIEPOLY_Compute_PolyIn() {
+	
+	for(long z = 0; z < ACTIVEBKG->Zsize; z++)
+	for(long x = 0; x < ACTIVEBKG->Xsize; x++) {
+		EERIE_BKG_INFO *eg = &ACTIVEBKG->fastdata[x][z];
 		
 		free(eg->polyin);
 		eg->polyin = NULL;
 		eg->nbpolyin = 0;
 		
-		long ii = std::max(i - 2, 0L);
-		long ij = std::max(j - 2, 0L);
-		long ai = std::min(i + 2, ACTIVEBKG->Xsize - 1L);
-		long aj = std::min(j + 2, ACTIVEBKG->Zsize - 1L);
+		long minx = std::max(x - 2, 0L);
+		long minz = std::max(z - 2, 0L);
+		long maxx = std::min(x + 2, ACTIVEBKG->Xsize - 1L);
+		long maxz = std::min(z + 2, ACTIVEBKG->Zsize - 1L);
 		
 		EERIE_2D_BBOX bb;
-		bb.min.x = (float)i * ACTIVEBKG->Xdiv - 10;
+		bb.min.x = (float)x * ACTIVEBKG->Xdiv - 10;
 		bb.max.x = (float)bb.min.x + ACTIVEBKG->Xdiv + 20;
-		bb.min.y = (float)j * ACTIVEBKG->Zdiv - 10;
+		bb.min.y = (float)z * ACTIVEBKG->Zdiv - 10;
 		bb.max.y = (float)bb.min.y + ACTIVEBKG->Zdiv + 20;
 		Vec3f bbcenter;
 		bbcenter.x = (bb.min.x + bb.max.x) * .5f;
 		bbcenter.z = (bb.min.y + bb.max.y) * .5f;
 		
-		for(long cj = ij; cj < aj; cj++)
-		for(long ci = ii; ci < ai; ci++) {
-			EERIE_BKG_INFO *eg2 = &ACTIVEBKG->fastdata[ci][cj];
+		for(long z2 = minz; z2 < maxz; z2++)
+		for(long x2 = minx; x2 < maxx; x2++) {
+			EERIE_BKG_INFO *eg2 = &ACTIVEBKG->fastdata[x2][z2];
 			
 			for(long l = 0; l < eg2->nbpoly; l++) {
 				EERIEPOLY *ep2 = &eg2->polydata[l];
@@ -1242,19 +1244,17 @@ long CountBkgVertex() {
 
 	long count = 0;
 
-	for(long j = 0; j < ACTIVEBKG->Zsize; j++) {
-		for(long i = 0; i < ACTIVEBKG->Xsize; i++) {
-			EERIE_BKG_INFO *eg = &ACTIVEBKG->fastdata[i][j];
+	for(long z = 0; z < ACTIVEBKG->Zsize; z++) {
+		for(long x = 0; x < ACTIVEBKG->Xsize; x++) {
+			const EERIE_BKG_INFO & eg = ACTIVEBKG->fastdata[x][z];
 
-			for(long l = 0; l < eg->nbpoly; l++) {
-				EERIEPOLY *ep = &eg->polydata[l];
-
-				if(ep) {
-					if(ep->type & POLY_QUAD)
-						count += 4;
-					else
-						count += 3;
-				}
+			for(long l = 0; l < eg.nbpoly; l++) {
+				const EERIEPOLY & ep = eg.polydata[l];
+				
+				if(ep.type & POLY_QUAD)
+					count += 4;
+				else
+					count += 3;
 			}
 		}
 	}

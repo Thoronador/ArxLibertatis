@@ -97,17 +97,17 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 static void EERIE_PORTAL_Release();
 
-static bool RayIn3DPolyNoCull(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * epp);
+static bool RayIn3DPolyNoCull(const Vec3f & orgn, const Vec3f & dest, const EERIEPOLY & epp);
 
-static bool IntersectLinePlane(const Vec3f & l1, const Vec3f & l2, const EERIEPOLY * ep, Vec3f * intersect) {
+static bool IntersectLinePlane(const Vec3f & l1, const Vec3f & l2, const EERIEPOLY & ep, Vec3f * intersect) {
 	
 	Vec3f v = l2 - l1;
 	
-	float d = glm::dot(v, ep->norm);
+	float d = glm::dot(v, ep.norm);
 	
 	if(d != 0.0f) {
-		Vec3f v1 = ep->center - l2;
-		d = glm::dot(v1, ep->norm) / d;
+		Vec3f v1 = ep.center - l2;
+		d = glm::dot(v1, ep.norm) / d;
 		
 		*intersect = (v * d) + l2;
 		
@@ -117,7 +117,7 @@ static bool IntersectLinePlane(const Vec3f & l1, const Vec3f & l2, const EERIEPO
 	return false;
 }
 
-bool RayCollidingPoly(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * ep, Vec3f * hit)
+bool RayCollidingPoly(const Vec3f & orgn, const Vec3f & dest, const EERIEPOLY & ep, Vec3f * hit)
 {
 	if(IntersectLinePlane(orgn, dest, ep, hit)) {
 		if(RayIn3DPolyNoCull(orgn, dest, ep))
@@ -604,9 +604,9 @@ int PointIn2DPolyXZ(const EERIEPOLY * ep, float x, float z) {
 
 extern EERIE_CAMERA raycam;
 
-static bool RayIn3DPolyNoCull(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * epp) {
+static bool RayIn3DPolyNoCull(const Vec3f & orgn, const Vec3f & dest, const EERIEPOLY & epp) {
 
-	EERIEPOLY ep = *epp;
+	EERIEPOLY ep = epp;
 	raycam.orgTrans.pos = orgn;
 	raycam.setTargetCamera(dest);
 	SP_PrepareCamera(&raycam);
@@ -618,7 +618,7 @@ static bool RayIn3DPolyNoCull(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY 
 	return false;
 }
 
-int EERIELaunchRay3(const Vec3f & orgn, const Vec3f & dest,  Vec3f * hit, EERIEPOLY * epp, long flag) {
+int EERIELaunchRay3(const Vec3f & orgn, const Vec3f & dest, Vec3f & hit, long flag) {
 	
 	Vec3f p; //current ray pos
 	Vec3f i;
@@ -628,7 +628,7 @@ int EERIELaunchRay3(const Vec3f & orgn, const Vec3f & dest,  Vec3f * hit, EERIEP
 	
 	long iii = 0;
 	float maxstepp = 20000.f / pas;
-	*hit = p = orgn;
+	hit = p = orgn;
 	
 	voidlast = 0;
 	lpx = lpz = -1;
@@ -657,39 +657,39 @@ int EERIELaunchRay3(const Vec3f & orgn, const Vec3f & dest,  Vec3f * hit, EERIEP
 		p += i;
 		
 		if(i.x == -1.f * pas && p.x <= dest.x) {
-			*hit = p;
+			hit = p;
 			return 0;
 		}
 		
 		if(i.x == 1.f * pas && p.x >= dest.x) {
-			*hit = p;
+			hit = p;
 			return 0;
 		}
 		
 		if(i.y == -1.f * pas && p.y <= dest.y) {
-			*hit = p;
+			hit = p;
 			return 0;
 		}
 		
 		if(i.y == 1.f * pas && p.y >= dest.y) {
-			*hit = p;
+			hit = p;
 			return 0;
 		}
 		
 		if(i.z == -1.f * pas && p.z <= dest.z) {
-			*hit = p;
+			hit = p;
 			return 0;
 		}
 		
 		if(i.z == 1.f * pas && p.z >= dest.z) {
-			*hit = p;
+			hit = p;
 			return 0;
 		}
 		
 		iii++;
 		
 		if(iii > maxstepp) {
-			*hit = p;
+			hit = p;
 			return -1;
 		}
 		
@@ -697,7 +697,7 @@ int EERIELaunchRay3(const Vec3f & orgn, const Vec3f & dest,  Vec3f * hit, EERIEP
 		long tilez = long(p.z * ACTIVEBKG->Zmul);
 		
 		if(tilex < 0 || tilex > ACTIVEBKG->Xsize - 1 || tilez < 0 || tilez > ACTIVEBKG->Zsize - 1) {
-			*hit = p;
+			hit = p;
 			return -1;
 		}
 		
@@ -715,31 +715,32 @@ int EERIELaunchRay3(const Vec3f & orgn, const Vec3f & dest,  Vec3f * hit, EERIEP
 		
 		EERIE_BKG_INFO * eg = &ACTIVEBKG->fastdata[tilex][tilez];
 		if(eg->nbpoly == 0) {
-			*hit = p;
+			hit = p;
 			return 1;
 		}
 		
 		for(short z = minz; z < maxz; z++)
 		for(short x = minx; x < maxx; x++) {
-			EERIE_BKG_INFO * eg = &ACTIVEBKG->fastdata[x][z];
-			for(long k = 0; k < eg->nbpoly; k++) {
-				EERIEPOLY * ep = &eg->polydata[k];
-				if(ep->type & POLY_TRANS) {
+			const EERIE_BKG_INFO & eg = ACTIVEBKG->fastdata[x][z];
+			for(long k = 0; k < eg.nbpoly; k++) {
+				const EERIEPOLY & ep = eg.polydata[k];
+				
+				if(ep.type & POLY_TRANS) {
 					continue;
 				}
-				if(   p.y < ep->min.y - 10.f
-				   || p.y > ep->max.y + 10.f
-				   || p.x < ep->min.x - 10.f
-				   || p.x > ep->max.x + 10.f
-				   || p.z < ep->min.z - 10.f
-				   || p.z > ep->max.z + 10.f
+				if(   p.y < ep.min.y - 10.f
+				   || p.y > ep.max.y + 10.f
+				   || p.x < ep.min.x - 10.f
+				   || p.x > ep.max.x + 10.f
+				   || p.z < ep.min.z - 10.f
+				   || p.z > ep.max.z + 10.f
 				) {
 					continue;
 				}
 				voidlast = 0;
 				if(RayIn3DPolyNoCull(orgn, dest, ep)) {
-					*hit = p;
-					return (ep == epp) ? 0 : 1;
+					hit = p;
+					return 1;
 				}
 			}
 		}
@@ -748,7 +749,7 @@ int EERIELaunchRay3(const Vec3f & orgn, const Vec3f & dest,  Vec3f * hit, EERIEP
 
 // TODO visible copy-paste
 // Computes the visibility from a point to another... (sort of...)
-bool Visible(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * epp, Vec3f * hit) {
+bool Visible(const Vec3f & orgn, const Vec3f & dest, Vec3f * hit) {
 	
 	ARX_PROFILE_FUNC();
 	
@@ -831,7 +832,7 @@ bool Visible(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * epp, Vec3f * hi
 			if((ep->min.y - pas < tmpPos.y) && (ep->max.y + pas > tmpPos.y))
 			if((ep->min.x - pas < tmpPos.x) && (ep->max.x + pas > tmpPos.x))
 			if((ep->min.z - pas < tmpPos.z) && (ep->max.z + pas > tmpPos.z))
-			if(RayCollidingPoly(orgn, dest, ep, hit)) {
+			if(RayCollidingPoly(orgn, dest, *ep, hit)) {
 				float dd = fdist(orgn, *hit);
 
 				if(dd < nearest) {
@@ -846,7 +847,7 @@ bool Visible(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * epp, Vec3f * hi
 	if(!found_ep)
 		return true;
 
-	if(found_ep == epp)
+	if(found_ep == NULL)
 		return true;
 	
 	*hit = found_hit;
@@ -2639,9 +2640,9 @@ void ComputePortalVertexBuffer() {
 				continue;
 			}
 			
-			if(!poly.tex->tMatRoom) {
-				poly.tex->tMatRoom = (SMY_ARXMAT *)malloc(sizeof(SMY_ARXMAT)
-														   * (portals->rooms.size()));
+			if(poly.tex->tMatRoomSize != portals->rooms.size()) {
+				poly.tex->tMatRoomSize = portals->rooms.size();
+				poly.tex->tMatRoom = (SMY_ARXMAT *)realloc(poly.tex->tMatRoom, sizeof(SMY_ARXMAT) * (portals->rooms.size()));
 			}
 			
 			SINFO_TEXTURE_VERTEX & info = infos[poly.tex];

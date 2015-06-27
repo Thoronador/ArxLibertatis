@@ -1562,7 +1562,7 @@ bool ARX_COLLISION_Move_Cylinder(IO_PHYSICS * ip, Entity * io, float MOVE_CYLIND
 }
 
 // TODO visible copy-paste
-bool IO_Visible(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * epp, Vec3f * hit)
+bool IO_Visible(const Vec3f & orgn, const Vec3f & dest, Vec3f * hit)
 {
 	ARX_PROFILE_FUNC();
 	
@@ -1665,7 +1665,7 @@ bool IO_Visible(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * epp, Vec3f *
 			if((ep->min.y - pas < tmpPos.y) && (ep->max.y + pas > tmpPos.y))
 			if((ep->min.x - pas < tmpPos.x) && (ep->max.x + pas > tmpPos.x))
 			if((ep->min.z - pas < tmpPos.z) && (ep->max.z + pas > tmpPos.z))
-			if(RayCollidingPoly(orgn, dest, ep, hit)) {
+			if(RayCollidingPoly(orgn, dest, *ep, hit)) {
 				float dd = fdist(orgn, *hit);
 				if(dd < nearest) {
 					nearest = dd;
@@ -1679,7 +1679,7 @@ bool IO_Visible(const Vec3f & orgn, const Vec3f & dest, EERIEPOLY * epp, Vec3f *
 	if(!found_ep)
 		return true;
 
-	if(found_ep == epp)
+	if(found_ep == NULL)
 		return true;
 	
 	*hit = found_hit;

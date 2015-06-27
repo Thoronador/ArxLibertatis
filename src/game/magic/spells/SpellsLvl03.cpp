@@ -289,9 +289,7 @@ void FireballSpell::Update(float timeDelta) {
 		light->intensity = 2.2f;
 		light->fallend = 500.f;
 		light->fallstart = 400.f;
-		light->rgb.r = 1.0f-rnd()*0.3f;
-		light->rgb.g = 0.6f-rnd()*0.1f;
-		light->rgb.b = 0.3f-rnd()*0.1f;
+		light->rgb = Color3f(1.0f, 0.6f, 0.3f) - Color3f(0.3f, 0.1f, 0.1f) * Color3f(rnd(), rnd(), rnd());
 	}
 	
 	Sphere sphere;
@@ -400,9 +398,7 @@ void CreateFoodSpell::Update(float timeDelta) {
 	
 	m_pos = entities.player()->pos;
 	
-	unsigned long ulCalc = m_duration - m_currentTime;
-	arx_assert(ulCalc <= LONG_MAX);
-	long ff =  static_cast<long>(ulCalc);
+	long ff = m_duration - m_currentTime;
 	
 	if(ff < 1500) {
 		m_particles.m_parameters.m_spawnFlags = PARTICLE_CIRCULAR;
@@ -452,18 +448,14 @@ void IceProjectileSpell::Launch()
 	tex_p1 = TextureContainer::Load("graph/obj3d/textures/(fx)_tsu_blueting");
 	tex_p2 = TextureContainer::Load("graph/obj3d/textures/(fx)_tsu_bluepouf");
 	iMax = (int)(30 + m_level * 5.2f);
-
 	
-	float fspelldist	= static_cast<float>(iMax * 15);
-
-	fspelldist = std::min(fspelldist, 200.0f);
-	fspelldist = std::max(fspelldist, 450.0f);
+	float fspelldist = glm::clamp(float(iMax * 15), 200.0f, 450.0f);
 	
 	Vec3f s = target + Vec3f(0.f, -100.f, 0.f);
 	Vec3f e = s + angleToVectorXZ(angleb) * fspelldist;
 	
 	Vec3f h;
-	if(!Visible(s, e, NULL, &h)) {
+	if(!Visible(s, e, &h)) {
 		e = h + angleToVectorXZ(angleb) * 20.f;
 	}
 

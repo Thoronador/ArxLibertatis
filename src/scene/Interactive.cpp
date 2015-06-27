@@ -941,9 +941,7 @@ void RestoreInitialIOStatusOfIO(Entity * io)
 		io->poisonous_count = 0;
 
 		for(long count = 0; count < MAX_ANIM_LAYERS; count++) {
-			memset(&io->animlayer[count], 0, sizeof(ANIM_USE));
-			io->animlayer[count].cur_anim = NULL;
-			io->animlayer[count].next_anim = NULL;
+			io->animlayer[count] = ANIM_USE();
 		}
 
 		if(io->obj && io->obj->pbox) {
@@ -2468,17 +2466,16 @@ void RenderInter() {
 		const EntityHandle handle = EntityHandle(i);
 		Entity * io = entities[handle];
 
-		if(!io || io == DRAGINTER || !(io->gameFlags & GFLAG_ISINTREATZONE))
-			continue;
-
-		if(io->show != SHOW_FLAG_IN_SCENE) {
+		if(   !io
+		   || io == DRAGINTER
+		   || !(io->gameFlags & GFLAG_ISINTREATZONE)
+		   || io->show != SHOW_FLAG_IN_SCENE
+		   || (io->ioflags & IO_CAMERA)
+		   || (io->ioflags & IO_MARKER)
+		) {
 			continue;
 		}
-
-		if((io->ioflags & IO_CAMERA) || (io->ioflags & IO_MARKER)) {
-			continue;
-		}
-
+		
 		Anglef temp = io->angle;
 
 		if(io->ioflags & IO_NPC) {

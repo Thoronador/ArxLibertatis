@@ -108,8 +108,10 @@ void cursorTexturesInit() {
 }
 
 
-bool Manage3DCursor(bool simulate) {
-
+bool Manage3DCursor(Entity * io, bool simulate) {
+	
+	arx_assert(io);
+	
 	if(BLOCK_PLAYER_CONTROLS)
 		return false;
 
@@ -122,11 +124,7 @@ bool Manage3DCursor(bool simulate) {
 
 	if(DANAEMouse.y < drop_miny)
 		return false;
-
-	Entity * io = DRAGINTER;
-	if(!io)
-		return false;
-
+	
 	Anglef temp = Anglef::ZERO;
 
 	if(io->ioflags & IO_INVERTED) {
@@ -198,11 +196,8 @@ bool Manage3DCursor(bool simulate) {
 	long iterating = 40;
 
 	cyl2.height = std::min(-30.f, height);
+	cyl2.radius = glm::clamp(maxdist, 20.f, 150.f);
 	
-	maxdist = glm::clamp(maxdist, 15.f, 150.f);
-	cyl2.radius = std::max(20.f, maxdist);
-
-
 	while(iterating > 0) {
 		cyl2.origin = pos + movev * inc + Vec3f(0.f, bbox.max.y, 0.f);
 
@@ -489,7 +484,7 @@ static void ARX_INTERFACE_RenderCursorInternal(bool flag) {
 		   && !InInventoryPos(DANAEMouse)
 		   && !g_cursorOverBook
 		) {
-			if(!Manage3DCursor(true))
+			if(!Manage3DCursor(DRAGINTER, true))
 				CANNOT_PUT_IT_HERE = -1;
 			
 			if(SPECIAL_DRAGINTER_RENDER) {

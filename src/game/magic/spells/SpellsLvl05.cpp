@@ -37,6 +37,12 @@
 #include "scene/Interactive.h"
 
 
+RuneOfGuardingSpell::RuneOfGuardingSpell()
+	: SpellBase()
+	, tex_p2(NULL)
+	, ulCurrentTime(0)
+{}
+
 void RuneOfGuardingSpell::Launch()
 {
 	spells.endByCaster(m_caster, SPELL_RUNE_OF_GUARDING);
@@ -267,7 +273,7 @@ void LevitateSpell::createDustParticle() {
 
 CurePoisonSpell::CurePoisonSpell()
 	: SpellBase()
-	, ulCurrentTime(0)
+	, m_currentTime(0)
 {}
 
 void CurePoisonSpell::Launch()
@@ -316,7 +322,7 @@ void CurePoisonSpell::Launch()
 	cp.m_blendMode = RenderMaterial::Additive;
 	cp.m_texture.set("graph/particles/cure_poison", 0, 100); //5
 	cp.m_spawnFlags = PARTICLE_CIRCULAR | PARTICLE_BORDER;
-	pPS.SetParams(cp);
+	m_particles.SetParams(cp);
 	}
 	
 	m_light = GetFreeDynLight();
@@ -341,24 +347,22 @@ void CurePoisonSpell::End() {
 
 void CurePoisonSpell::Update(float timeDelta) {
 	
-	ulCurrentTime += timeDelta;
+	m_currentTime += timeDelta;
 	
 	m_pos = entities[m_target]->pos;
 	
 	if(m_target == PlayerEntityHandle)
 		m_pos.y += 200;
 	
-	unsigned long ulCalc = m_duration - ulCurrentTime ;
-	arx_assert(ulCalc <= LONG_MAX);
-	long ff = 	static_cast<long>(ulCalc);
-
+	long ff = m_duration - m_currentTime;
+	
 	if(ff < 1500) {
-		pPS.m_parameters.m_spawnFlags = PARTICLE_CIRCULAR;
-		pPS.m_parameters.m_gravity = Vec3f_ZERO;
+		m_particles.m_parameters.m_spawnFlags = PARTICLE_CIRCULAR;
+		m_particles.m_parameters.m_gravity = Vec3f_ZERO;
 
 		std::list<Particle *>::iterator i;
 
-		for(i = pPS.listParticle.begin(); i != pPS.listParticle.end(); ++i) {
+		for(i = m_particles.listParticle.begin(); i != m_particles.listParticle.end(); ++i) {
 			Particle * pP = *i;
 
 			if(pP->isAlive()) {
@@ -371,8 +375,8 @@ void CurePoisonSpell::Update(float timeDelta) {
 		}
 	}
 
-	pPS.SetPos(m_pos);
-	pPS.Update(timeDelta);
+	m_particles.SetPos(m_pos);
+	m_particles.Update(timeDelta);
 
 	if(!lightHandleIsValid(m_light))
 		m_light = GetFreeDynLight();
@@ -390,7 +394,7 @@ void CurePoisonSpell::Update(float timeDelta) {
 		light->extras = 0;
 	}
 	
-	pPS.Render();
+	m_particles.Render();
 }
 
 

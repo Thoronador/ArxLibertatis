@@ -72,7 +72,7 @@ extern Vec3f lastteleport;
 extern EERIE_CAMERA bookcam;
 extern Vec2s DANAEMouse;
 extern EERIE_CAMERA subj;
-extern Vec3f moveto;
+extern Vec3f g_moveto;
 extern Vec2s STARTDRAG;
 extern EERIE_3DOBJ * GoldCoinsObj[MAX_GOLD_COINS_VISUALS];
 extern Vec3f Mscenepos;
@@ -118,6 +118,9 @@ extern float Original_framedelay;
 extern long LOADEDD;
 
 extern bool g_debugToggles[10];
+extern bool g_debugTriggers[10];
+extern u32 g_debugTriggersTime[10];
+static const u32 g_debugTriggersDecayDuration = 200;
 
 extern long		CHANGE_LEVEL_ICON;
 

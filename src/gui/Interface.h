@@ -200,7 +200,6 @@ enum ARX_INTERFACE_CURSOR_MODE
 //-----------------------------------------------------------------------------
 extern INTERFACE_TC ITC;
 extern Vec2s MemoMouse;
-extern bool bookclick;
 
 extern long SpecialCursor;
 
@@ -256,7 +255,7 @@ void ARX_INTERFACE_HALO_Draw(Entity * io, TextureContainer * tc, TextureContaine
 void ReleaseHalo();
 void ResetPlayerInterface();
 void Set_DragInter(Entity * io);
-void ARX_INTERFACE_DrawNumber(const Vec2f & pos, const long num, const int _iNb, const Color color);
+void ARX_INTERFACE_DrawNumber(const Vec2f & pos, const long num, const int _iNb, const Color color, float scale);
 
 void KillInterfaceTextureContainers();
 

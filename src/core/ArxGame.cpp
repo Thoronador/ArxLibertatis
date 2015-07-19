@@ -127,6 +127,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "math/Vector.h"
 
 #include "physics/Attractors.h"
+#include "platform/Time.h"
 
 #include "io/fs/FilePath.h"
 #include "io/fs/Filesystem.h"
@@ -189,8 +190,6 @@ extern CircularVertexBuffer<SMY_VERTEX3> * pDynamicVertexBuffer;
 
 long STOP_KEYBOARD_INPUT= 0;
 
-long BOOKBUTTON=0;
-long LASTBOOKBUTTON=0;
 bool EXTERNALVIEW = false;
 bool SHOW_INGAME_MINIMAP = true;
 
@@ -1652,8 +1651,26 @@ void ArxGame::updateInput() {
 		EERIEMouseButton &= ~2;
 	}
 	
+	
+	// Overwrite the mouse button status when menu is active
+	if(ARXmenu.currentmode != AMCM_OFF) {
+		
+		EERIEMouseButton = 0;
+		
+		if(GInput->getMouseButtonRepeat(Mouse::Button_0))
+			EERIEMouseButton |= 1;
+		else
+			EERIEMouseButton &= ~1;
+		
+		if(GInput->getMouseButtonRepeat(Mouse::Button_1))
+			EERIEMouseButton |= 2;
+		else
+			EERIEMouseButton &= ~2;
+	}
+	
+	
 	if(EERIEMouseGrab && GInput->hasMouseMoved()) {
-		if(!(ARXmenu.currentmode == AMCM_NEWQUEST || (player.Interface & INTER_MAP && (Book_Mode != BOOKMODE_MINIMAP)))) {
+		if(!(ARXmenu.currentmode == AMCM_NEWQUEST || (player.Interface & INTER_MAP && (g_guiBookCurrentTopTab != BOOKMODE_MINIMAP)))) {
 			GInput->setMousePosAbs(Vec2s(g_size.center()));
 		}
 	}
@@ -1680,9 +1697,21 @@ void ArxGame::updateInput() {
 	}
 
 	if(g_debugInfo == InfoPanelDebugToggles) {
+		
 		for(size_t i = 0; i < ARRAY_SIZE(g_debugToggles); i++) {
-			if(GInput->isKeyPressedNowPressed(Keyboard::Key_NumPad0 + i)) {
-				g_debugToggles[i] = !g_debugToggles[i];
+			g_debugTriggers[i] = false;
+			
+			if(GInput->isKeyPressed(Keyboard::Key_NumPadEnter)) {
+				if(   GInput->isKeyPressed(Keyboard::Key_NumPad0 + i)
+				   && platform::getElapsedMs(g_debugTriggersTime[i]) > g_debugTriggersDecayDuration
+				) {
+					g_debugTriggersTime[i] = platform::getTimeMs();
+					g_debugTriggers[i] = true;
+				}
+			} else {
+				if(GInput->isKeyPressedNowPressed(Keyboard::Key_NumPad0 + i)) {
+					g_debugToggles[i] = !g_debugToggles[i];
+				}
 			}
 		}
 	}
@@ -1780,7 +1809,7 @@ void ArxGame::updateLevel() {
 	ARX_PLAYER_Manage_Visual();
 
 	g_miniMap.setActiveBackground(ACTIVEBKG);
-	g_miniMap.validatePlayerPos(CURRENTLEVEL, BLOCK_PLAYER_CONTROLS, Book_Mode);
+	g_miniMap.validatePlayerPos(CURRENTLEVEL, BLOCK_PLAYER_CONTROLS, g_guiBookCurrentTopTab);
 
 
 	if(entities.player()->animlayer[0].cur_anim) {
@@ -2098,14 +2127,6 @@ void ArxGame::render() {
 		// Checks Clicks in Book Interface
 		if(ARX_INTERFACE_MouseInBook()) {
 			g_cursorOverBook = true;
-			LASTBOOKBUTTON = BOOKBUTTON;
-			BOOKBUTTON = EERIEMouseButton;
-			
-			if((eeMouseDown1())
-			   || (eeMouseDown2())
-			) {
-				bookclick = true;
-			}
 		}
 	}
 	
@@ -2144,6 +2165,9 @@ void ArxGame::render() {
 	// Updates Externalview
 	EXTERNALVIEW = false;
 
+	if(g_debugTriggers[1])
+		bookIconGuiRequestFX();
+	
 	if(isInMenu()) {
 		renderMenu();
 	} else if(isInCinematic()) {

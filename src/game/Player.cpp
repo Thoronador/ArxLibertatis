@@ -84,6 +84,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "gui/Speech.h"
 #include "gui/Interface.h"
 #include "gui/MiniMap.h"
+#include "gui/hud/SecondaryInventory.h"
 
 #include "graphics/BaseGraphicsTypes.h"
 #include "graphics/Color.h"
@@ -442,10 +443,10 @@ static void ARX_PLAYER_ComputePlayerStats() {
 	float base_defense = player.m_skill.defense + player.m_attribute.constitution * 3;
 	float fCalc = base_defense * ( 1.0f / 10 ) - 1 ;
 	player.m_misc.armorClass = checked_range_cast<unsigned char>(fCalc);
-
-
-	if (player.m_misc.armorClass < 1) player.m_misc.armorClass = 1;
-
+	
+	if(player.m_misc.armorClass < 1)
+		player.m_misc.armorClass = 1;
+	
 	float base_casting = player.m_skill.casting + player.m_attribute.mind * 2.f;
 	player.m_misc.resistMagic = (unsigned char)(float)(player.m_attribute.mind * 2.f
 	                      * (1.f + base_casting * ( 1.0f / 200 )));
@@ -455,9 +456,10 @@ static void ARX_PLAYER_ComputePlayerStats() {
 
 
 	player.m_misc.damages = (player.m_attribute.strength - 10) * ( 1.0f / 2 );
-
-	if (player.m_misc.damages < 1.f) player.m_misc.damages = 1.f;
-
+	
+	if(player.m_misc.damages < 1.f)
+		player.m_misc.damages = 1.f;
+	
 	player.AimTime = 1500;
 	
 	float base_close_combat = player.m_skill.closeCombat
@@ -1406,7 +1408,7 @@ void ARX_PLAYER_Manage_Visual() {
 			io->move = io->lastmove = Vec3f_ZERO;
 		} else {
 			ause0.flags &= ~EA_STATICANIM;
-			player.pos = moveto = player.pos + io->move;
+			player.pos = g_moveto = player.pos + io->move;
 			io->pos = player.basePosition();
 			goto nochanges;
 		}
@@ -1831,7 +1833,7 @@ void ARX_PLAYER_Frame_Update()
 	}
 
 	// Reset player moveto info
-	moveto = player.pos;
+	g_moveto = player.pos;
 
 	// Reset current movement flags
 	player.Current_Movement = 0;
@@ -2188,7 +2190,7 @@ void PlayerMovementIterate(float DeltaTime) {
 			}
 		}
 		
-		Vec3f impulse = moveto - player.pos;
+		Vec3f impulse = g_moveto - player.pos;
 		if(impulse != Vec3f_ZERO) {
 			
 			float scale = 1.25f / 1000;
@@ -2222,7 +2224,7 @@ void PlayerMovementIterate(float DeltaTime) {
 			// No Vertical Interpolation
 			entities.player()->_npcdata->vvpos = -99999.f;
 			if(player.jumpphase == JumpAscending) {
-				moveto.y = player.pos.y;
+				g_moveto.y = player.pos.y;
 				player.physics.velocity.y = 0;
 			}
 		}
@@ -2232,14 +2234,14 @@ void PlayerMovementIterate(float DeltaTime) {
 			player.physics.velocity.y *= 0.5f;
 			player.physics.velocity.z = 0.f;
 			if(player.Current_Movement & PLAYER_MOVE_WALK_FORWARD) {
-				moveto.x = player.pos.x;
-				moveto.z = player.pos.z;
+				g_moveto.x = player.pos.x;
+				g_moveto.z = player.pos.z;
 			}
 			if(player.Current_Movement & PLAYER_MOVE_WALK_BACKWARD) {
 				impulse.x = 0;
 				impulse.z = 0;
-				moveto.x = player.pos.x;
-				moveto.z = player.pos.z;
+				g_moveto.x = player.pos.x;
+				g_moveto.z = player.pos.z;
 			}
 		}
 		
@@ -2326,7 +2328,7 @@ void PlayerMovementIterate(float DeltaTime) {
 		   && player.onfirmground
 		   && player.jumpphase == NotJumping
 		) {
-			moveto = player.pos;
+			g_moveto = player.pos;
 			goto lasuite;
 		} else {
 			
@@ -2432,23 +2434,23 @@ void PlayerMovementIterate(float DeltaTime) {
 				player.climbing = false;
 			}
 			
-			moveto = player.physics.cyl.origin + player.baseOffset();
-			d = glm::distance(player.pos, moveto);
+			g_moveto = player.physics.cyl.origin + player.baseOffset();
+			d = glm::distance(player.pos, g_moveto);
 		}
 	} else {
-		Vec3f vect = moveto - player.pos;
+		Vec3f vect = g_moveto - player.pos;
 		float divv = glm::length(vect);
 		if(divv > 0.f) {
 			float mul = (float)framedelay * 0.001f * 200.f;
 			divv = mul / divv;
 			vect *= divv;
-			moveto = player.pos + vect;
+			g_moveto = player.pos + vect;
 		}
 		
 		player.onfirmground = false;
 	}
 	
-	if(player.pos == moveto) {
+	if(player.pos == g_moveto) {
 		d = 0.f;
 	}
 	
@@ -2465,7 +2467,7 @@ void PlayerMovementIterate(float DeltaTime) {
 	}
 	
 	// Finally update player pos !
-	player.pos = moveto;
+	player.pos = g_moveto;
 	
 lasuite:
 	;
@@ -2481,7 +2483,7 @@ lasuite:
 		CURRENT_PLAYER_COLOR = std::max(CURRENT_PLAYER_COLOR, grnd_color);
 	}
 	
-	gui::InventoryFaderUpdate();
+	g_secondaryInventoryHud.updateFader();
 }
 
 /*!

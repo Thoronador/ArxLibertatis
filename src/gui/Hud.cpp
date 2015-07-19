@@ -48,6 +48,9 @@
 #include "gui/Interface.h"
 #include "gui/Speech.h"
 #include "gui/book/Book.h"
+#include "gui/hud/HudCommon.h"
+#include "gui/hud/PlayerInventory.h"
+#include "gui/hud/SecondaryInventory.h"
 
 #include "input/Input.h"
 
@@ -59,120 +62,6 @@ extern float InventoryDir;
 extern bool WILLRETURNTOFREELOOK;
 
 bool bIsAiming = false;
-TextureContainer * BasicInventorySkin=NULL;
-float InventoryX = -60.f;
-static float fDecPulse;
-bool bInventorySwitch = false;
-
-enum Anchor {
-	Anchor_TopLeft,
-	Anchor_TopCenter,
-	Anchor_TopRight,
-	Anchor_LeftCenter,
-	Anchor_Center,
-	Anchor_RightCenter,
-	Anchor_BottomLeft,
-	Anchor_BottomCenter,
-	Anchor_BottomRight,
-};
-
-static Vec2f getAnchorPos(const Rectf & rect, const Anchor anchor) {
-	switch(anchor) {
-		case Anchor_TopLeft:      return rect.topLeft();
-		case Anchor_TopCenter:    return rect.topCenter();
-		case Anchor_TopRight:     return rect.topRight();
-		case Anchor_LeftCenter:   return Vec2f(rect.left, rect.top + rect.height() / 2);
-		case Anchor_Center:       return rect.center();
-		case Anchor_RightCenter:  return Vec2f(rect.right, rect.top + rect.height() / 2);
-		case Anchor_BottomLeft:   return rect.bottomLeft();
-		case Anchor_BottomCenter: return rect.bottomCenter();
-		case Anchor_BottomRight:  return rect.bottomRight();
-		default: return rect.topLeft();
-	}
-}
-
-static Rectf createChild(const Rectf & parent, const Anchor parentAnchor,
-                         const Vec2f & size, const Anchor childAnchor) {
-	
-	Vec2f parentPos = getAnchorPos(parent, parentAnchor);
-	
-	Rectf child(size.x, size.y);
-	Vec2f childPos = getAnchorPos(child, childAnchor);
-	child.move(parentPos.x, parentPos.y);
-	child.move(-childPos.x, -childPos.y);
-	return child;
-}
-
-namespace gui {
-
-void InventoryFaderUpdate() {
-	
-	if(InventoryDir != 0) {
-		if((player.Interface & INTER_COMBATMODE) || player.doingmagic >= 2 || InventoryDir == -1) {
-			if(InventoryX > -160)
-				InventoryX -= INTERFACE_RATIO(framedelay * ( 1.0f / 3 ));
-		} else {
-			if(InventoryX < 0)
-				InventoryX += InventoryDir * INTERFACE_RATIO(framedelay * ( 1.0f / 3 ));
-		}
-
-		if(InventoryX <= -160) {
-			InventoryX = -160;
-			InventoryDir = 0;
-
-			if(player.Interface & INTER_STEAL || ioSteal) {
-				SendIOScriptEvent(ioSteal, SM_STEAL, "off");
-				player.Interface &= ~INTER_STEAL;
-				ioSteal = NULL;
-			}
-
-			SecondaryInventory = NULL;
-			TSecondaryInventory = NULL;
-			InventoryDir = 0;
-		} else if(InventoryX >= 0) {
-			InventoryX = 0;
-			InventoryDir = 0;
-		}
-	}
-}
-
-void CloseSecondaryInventory() {
-	
-	Entity * io = NULL;
-	
-	if(SecondaryInventory)
-		io = SecondaryInventory->io;
-	else if(player.Interface & INTER_STEAL)
-		io = ioSteal;
-	
-	if(io) {
-		InventoryDir = -1;
-		SendIOScriptEvent(io, SM_INVENTORY2_CLOSE);
-		TSecondaryInventory = SecondaryInventory;
-		SecondaryInventory = NULL;
-	}
-}
-
-}
-
-
-
-class HudItem {
-public:
-	HudItem()
-		: m_scale(1.f)
-	{}
-	
-	void setScale(float scale) {
-		m_scale = scale;
-	}
-
-	Rectf rect() { return m_rect; }
-	
-protected:
-	float m_scale;
-	Rectf m_rect;
-};
 
 /*!
  * \brief the hit strength diamond shown at the bottom of the UI.
@@ -286,443 +175,8 @@ void hitStrengthGaugeRequestFlash(float flashIntensity) {
 	hitStrengthGauge.requestFlash(flashIntensity);
 }
 
-class SecondaryInventoryGui {
-private:
-	Vec2f m_size;
-	TextureContainer * ingame_inventory;
-	TextureContainer * m_canNotSteal;
-	
-public:
-	void init() {
-		m_size = Vec2f(115.f, 378.f);
-		m_canNotSteal = TextureContainer::LoadUI("graph/interface/icons/cant_steal_item");
-		arx_assert(m_canNotSteal);
-	}
-	
-	Entity* getSecondaryOrStealInvEntity() {
-		if(SecondaryInventory) {
-			return SecondaryInventory->io;
-		} else if(player.Interface & INTER_STEAL) {
-			return ioSteal;
-		}
-		return NULL;
-	}
-	
-	void update() {
-		Entity * io = getSecondaryOrStealInvEntity();
-		if(io) {
-			float dist = fdist(io->pos, player.pos + (Vec3f_Y_AXIS * 80.f));
-			
-			float maxDist = player.m_telekinesis ? 900.f : 350.f;
-			
-			if(dist > maxDist) {
-				if(InventoryDir != -1) {
-					ARX_SOUND_PlayInterface(SND_BACKPACK, 0.9F + 0.2F * rnd());
-
-					InventoryDir=-1;
-					SendIOScriptEvent(io,SM_INVENTORY2_CLOSE);
-					TSecondaryInventory=SecondaryInventory;
-					SecondaryInventory=NULL;
-				} else {
-					if(player.Interface & INTER_STEAL) {
-						player.Interface &= ~INTER_STEAL;
-					}
-				}
-			}
-		} else if(InventoryDir != -1) {
-			InventoryDir = -1;
-		}
-	}
-	
-	void draw() {
-		const INVENTORY_DATA * inventory = TSecondaryInventory;
-		
-		if(!inventory)
-			return;
-		
-		bool _bSteal = (bool)((player.Interface & INTER_STEAL) != 0);
-		
-		arx_assert(BasicInventorySkin);
-		ingame_inventory = BasicInventorySkin;
-		if(inventory->io && !inventory->io->inventory_skin.empty()) {
-			
-			res::path file = "graph/interface/inventory" / inventory->io->inventory_skin;
-			TextureContainer * tc = TextureContainer::LoadUI(file);
-			if(tc)
-				ingame_inventory = tc;
-		}
-		
-		Rectf rect = Rectf(Vec2f(INTERFACE_RATIO(InventoryX), 0.f), m_size.x, m_size.y);
-		EERIEDrawBitmap(rect, 0.001f, ingame_inventory, Color::white);
-		
-		for(long y = 0; y < inventory->m_size.y; y++) {
-		for(long x = 0; x < inventory->m_size.x; x++) {
-			Entity *io = inventory->slot[x][y].io;
-			if(!io)
-				continue;
-			
-			bool bItemSteal = false;
-			TextureContainer *tc = io->inv;
-			TextureContainer *tc2 = NULL;
-			
-			if(NeedHalo(io))
-				tc2 = io->inv->getHalo();
-			
-			if(_bSteal) {
-				if(!ARX_PLAYER_CanStealItem(io)) {
-					bItemSteal = true;
-					tc = m_canNotSteal;
-					tc2 = NULL;
-				}
-			}
-			
-			if(tc && (inventory->slot[x][y].show || bItemSteal)) {
-				UpdateGoldObject(io);
-				
-				Vec2f p = Vec2f(
-					INTERFACE_RATIO(InventoryX) + (float)x*INTERFACE_RATIO(32) + INTERFACE_RATIO(2),
-					(float)y*INTERFACE_RATIO(32) + INTERFACE_RATIO(13)
-				);
-				
-				Vec2f size = Vec2f(tc->size());
-				
-				Color color = (io->poisonous && io->poisonous_count!=0) ? Color::green : Color::white;
-				
-				Rectf rect(p, size.x, size.y);
-				// TODO use alpha blending so this will be anti-aliased even w/o alpha to coverage
-				EERIEDrawBitmap(rect, 0.001f, tc, color);
-				
-				Color overlayColor = Color::black;
-				
-				if(!bItemSteal && (io==FlyingOverIO))
-					overlayColor = Color::white;
-				else if(!bItemSteal && (io->ioflags & IO_CAN_COMBINE)) {
-					overlayColor = Color3f::gray(glm::abs(glm::cos(glm::radians(fDecPulse)))).to<u8>();
-				}
-				
-				if(overlayColor != Color::black) {
-					GRenderer->SetBlendFunc(Renderer::BlendSrcAlpha, Renderer::BlendOne);
-					GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-					
-					EERIEDrawBitmap(rect, 0.001f, tc, overlayColor);
-					
-					GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-				}
-				
-				if(tc2) {
-					ARX_INTERFACE_HALO_Draw(io, tc, tc2, p);
-				}
-				
-				if((io->ioflags & IO_ITEM) && io->_itemdata->count != 1)
-					ARX_INTERFACE_DrawNumber(p, io->_itemdata->count, 3, Color::white);
-			}
-		}
-		}
-	}
-};
-SecondaryInventoryGui secondaryInventory;
 
 
-extern PlayerInterfaceFlags lOldInterface;
-
-class InventoryGui {
-private:
-	TextureContainer * m_heroInventory;
-	TextureContainer * m_heroInventoryLink;
-	TextureContainer * m_heroInventoryUp;
-	TextureContainer * m_heroInventoryDown;
-	
-	Vec2f m_pos;
-	
-	Vec2f m_slotSize;
-	Vec2f m_slotSpacing;
-	
-public:
-	void init() {
-		m_heroInventory = TextureContainer::LoadUI("graph/interface/inventory/hero_inventory");
-		m_heroInventoryLink = TextureContainer::LoadUI("graph/interface/inventory/hero_inventory_link");
-		m_heroInventoryUp = TextureContainer::LoadUI("graph/interface/inventory/scroll_up");
-		m_heroInventoryDown = TextureContainer::LoadUI("graph/interface/inventory/scroll_down");
-		arx_assert(m_heroInventory);
-		arx_assert(m_heroInventoryLink);
-		arx_assert(m_heroInventoryUp);
-		arx_assert(m_heroInventoryDown);
-	}
-	
-	bool updateInput() {
-		Vec2f anchorPos = getInventoryGuiAnchorPosition();
-		
-		Vec2f pos = anchorPos + Vec2f(INTERFACE_RATIO_DWORD(m_heroInventory->m_dwWidth) - INTERFACE_RATIO(32 + 3), INTERFACE_RATIO(- 3 + 25));
-		
-		bool bQuitCombine = true;
-		
-		if(sActiveInventory > 0) {
-			const Rect mouseTestRect(
-			pos.x,
-			pos.y,
-			pos.x + INTERFACE_RATIO(32),
-			pos.y + INTERFACE_RATIO(32)
-			);
-			
-			if(mouseTestRect.contains(Vec2i(DANAEMouse)))
-				bQuitCombine = false;
-		}
-
-		if(sActiveInventory < player.bag-1) {
-			float fRatio = INTERFACE_RATIO(32 + 5);
-
-			pos.y += checked_range_cast<int>(fRatio);
-			
-			const Rect mouseTestRect(
-			pos.x,
-			pos.y,
-			pos.x + INTERFACE_RATIO(32),
-			pos.y + INTERFACE_RATIO(32)
-			);
-			
-			if(mouseTestRect.contains(Vec2i(DANAEMouse)))
-				bQuitCombine = false;
-		}
-		
-		return bQuitCombine;
-	}
-	
-	void update() {
-		if(player.Interface & INTER_INVENTORY) {
-			if((player.Interface & INTER_COMBATMODE) || player.doingmagic >= 2) {
-				long t = Original_framedelay * (1.f/5) + 2;
-				InventoryY += static_cast<long>(INTERFACE_RATIO_LONG(t));
-	
-				if(InventoryY > INTERFACE_RATIO(110.f)) {
-					InventoryY = static_cast<long>(INTERFACE_RATIO(110.f));
-				}
-			} else {
-				if(bInventoryClosing) {
-					long t = Original_framedelay * (1.f/5) + 2;
-					InventoryY += static_cast<long>(INTERFACE_RATIO_LONG(t));
-	
-					if(InventoryY > INTERFACE_RATIO(110)) {
-						InventoryY = static_cast<long>(INTERFACE_RATIO(110.f));
-						bInventoryClosing = false;
-	
-						player.Interface &=~ INTER_INVENTORY;
-	
-						if(bInventorySwitch) {
-							bInventorySwitch = false;
-							ARX_SOUND_PlayInterface(SND_BACKPACK, 0.9F + 0.2F * rnd());
-							player.Interface |= INTER_INVENTORYALL;
-							ARX_INTERFACE_NoteClose();
-							InventoryY = static_cast<long>(INTERFACE_RATIO(121.f) * player.bag);
-							lOldInterface=INTER_INVENTORYALL;
-						}
-					}
-				} else if(InventoryY > 0) {
-					InventoryY -= static_cast<long>(INTERFACE_RATIO((Original_framedelay * (1.f/5)) + 2.f));
-	
-					if(InventoryY < 0) {
-						InventoryY = 0;
-					}
-				}
-			}
-		} else if((player.Interface & INTER_INVENTORYALL) || bInventoryClosing) {
-			float fSpeed = (1.f/3);
-			if((player.Interface & INTER_COMBATMODE) || player.doingmagic >= 2) {
-				if(InventoryY < INTERFACE_RATIO(121) * player.bag) {
-					InventoryY += static_cast<long>(INTERFACE_RATIO((Original_framedelay * fSpeed) + 2.f));
-				}
-			} else {
-				if(bInventoryClosing) {
-					InventoryY += static_cast<long>(INTERFACE_RATIO((Original_framedelay * fSpeed) + 2.f));
-					if(InventoryY > INTERFACE_RATIO(121) * player.bag) {
-						bInventoryClosing = false;
-						if(player.Interface & INTER_INVENTORYALL) {
-							player.Interface &= ~INTER_INVENTORYALL;
-						}
-						lOldInterface=0;
-					}
-				} else if(InventoryY > 0) {
-					InventoryY -= static_cast<long>(INTERFACE_RATIO((Original_framedelay * fSpeed) + 2.f));
-					if(InventoryY < 0) {
-						InventoryY = 0;
-					}
-				}
-			}
-		}
-	}
-	
-	void CalculateInventoryCoordinates() {
-		
-		m_slotSize = Vec2f(32, 32);
-		m_slotSpacing = Vec2f(7, 6);
-		
-		Vec2f anchorPos = getInventoryGuiAnchorPosition();
-		
-		m_pos.x = anchorPos.x + INTERFACE_RATIO_DWORD(m_heroInventory->m_dwWidth) - INTERFACE_RATIO(32 + 3) ;
-		m_pos.y = anchorPos.y + INTERFACE_RATIO(- 3 + 25);
-	}
-	
-	//-----------------------------------------------------------------------------
-	void ARX_INTERFACE_DrawInventory(size_t bag, int _iX=0, int _iY=0)
-	{
-		fDecPulse += framedelay * 0.5f;
-		
-		Vec2f anchorPos = getInventoryGuiAnchorPosition();
-		
-		const Vec2f pos = anchorPos + Vec2f(_iX, _iY);
-		
-		Rectf rect = Rectf(pos + Vec2f(0.f, -INTERFACE_RATIO(5)), m_heroInventory->m_dwWidth, m_heroInventory->m_dwHeight);
-		EERIEDrawBitmap(rect, 0.001f, m_heroInventory, Color::white);
-		
-		for(size_t y = 0; y < INVENTORY_Y; y++) {
-		for(size_t x = 0; x < INVENTORY_X; x++) {
-			Entity *io = inventory[bag][x][y].io;
-			
-			if(!io || !inventory[bag][x][y].show)
-				continue;
-			
-			TextureContainer *tc = io->inv;
-			TextureContainer *tc2 = NULL;
-			
-			if(NeedHalo(io))
-				tc2 = io->inv->getHalo();
-			
-			if(!tc)
-				continue;
-			
-			const Vec2f p = pos + Vec2f(x, y) * m_slotSize + m_slotSpacing;
-			
-			Color color = (io->poisonous && io->poisonous_count != 0) ? Color::green : Color::white;
-			
-			Rectf rect(p, tc->m_dwWidth, tc->m_dwHeight);
-			// TODO use alpha blending so this will be anti-aliased even w/o alpha to coverage
-			EERIEDrawBitmap(rect, 0.001f, tc, color);
-			
-			Color overlayColor = Color::black;
-			
-			if(io == FlyingOverIO)
-				overlayColor = Color::white;
-			else if(io->ioflags & IO_CAN_COMBINE)
-				overlayColor = Color3f::gray(glm::abs(glm::cos(glm::radians(fDecPulse)))).to<u8>();
-			
-			
-			if(overlayColor != Color::black) {
-				GRenderer->SetBlendFunc(Renderer::BlendSrcAlpha, Renderer::BlendOne);
-				GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-				
-				EERIEDrawBitmap(rect, 0.001f, tc, overlayColor);
-				
-				GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-			}
-			
-			if(tc2) {
-				ARX_INTERFACE_HALO_Render(io->halo.color, io->halo.flags, tc2, p);
-			}
-			
-			if((io->ioflags & IO_ITEM) && io->_itemdata->count != 1)
-				ARX_INTERFACE_DrawNumber(p, io->_itemdata->count, 3, Color::white);
-		}
-		}
-	}
-	
-	void draw() {
-		if(player.Interface & INTER_INVENTORY) {		
-			if(player.bag) {
-				ARX_INTERFACE_DrawInventory(sActiveInventory);
-				
-				CalculateInventoryCoordinates();
-				
-				if(sActiveInventory > 0) {
-					Rectf rect = Rectf(m_pos, 32.f, 32.f);
-					
-					EERIEDrawBitmap(rect, 0.001f, m_heroInventoryUp, Color::white);
-					
-					if(rect.contains(Vec2f(DANAEMouse))) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						
-						EERIEDrawBitmap(rect, 0.001f, m_heroInventoryUp, Color::white);
-						
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						
-						if ((eeMouseDown1())
-							|| (eeMouseUp1() && DRAGINTER))
-						{
-							if(sActiveInventory > 0) {
-								ARX_SOUND_PlayInterface(SND_BACKPACK, 0.9F + 0.2F * rnd());
-								sActiveInventory --;
-							}
-							
-							EERIEMouseButton &= ~1;
-						}
-					}
-				}
-				
-				if(sActiveInventory < player.bag-1) {
-					Rectf rect = Rectf(m_pos + Vec2f(0.f, 32.f + 5.f), 32.f, 32.f);
-					
-					EERIEDrawBitmap(rect, 0.001f, m_heroInventoryDown, Color::white);
-					
-					if(rect.contains(Vec2f(DANAEMouse))) {
-						GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-						GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-						
-						EERIEDrawBitmap(rect, 0.001f, m_heroInventoryDown, Color::white);
-						
-						GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-						SpecialCursor=CURSOR_INTERACTION_ON;
-						
-						if ((eeMouseDown1())
-							|| (eeMouseUp1() && DRAGINTER))
-						{
-							if(sActiveInventory < player.bag-1) {
-								ARX_SOUND_PlayInterface(SND_BACKPACK, 0.9F + 0.2F * rnd());
-								sActiveInventory ++;
-							}
-							
-							EERIEMouseButton &= ~1;
-						}
-					}
-				}
-			}
-		} else if((player.Interface & INTER_INVENTORYALL) || bInventoryClosing) {				
-			
-			Vec2f anchorPos = getInventoryGuiAnchorPosition();
-			
-			//TODO see about these coords, might be calculated once only
-			const float fBag = (player.bag-1) * INTERFACE_RATIO(-121);
-			const float fOffsetY = INTERFACE_RATIO(121);
-			
-			int iOffsetY = checked_range_cast<int>(fBag + fOffsetY);
-			int posx = checked_range_cast<int>(anchorPos.x);
-			int posy = checked_range_cast<int>(anchorPos.y + INTERFACE_RATIO(-3.f + 25 - 32));
-			
-			for(int i = 0; i < player.bag; i++) {
-				Vec2f pos1 = Vec2f(posx + INTERFACE_RATIO(45), static_cast<float>(posy + iOffsetY));
-				Vec2f pos2 = Vec2f(posx + INTERFACE_RATIO_DWORD(m_heroInventory->m_dwWidth)*0.5f + INTERFACE_RATIO(-16), posy+iOffsetY + INTERFACE_RATIO(-5));
-				Vec2f pos3 = Vec2f(posx + INTERFACE_RATIO_DWORD(m_heroInventory->m_dwWidth) + INTERFACE_RATIO(-45-32), posy+iOffsetY + INTERFACE_RATIO(-15));
-				
-				TextureContainer * tex = m_heroInventoryLink;
-				
-				EERIEDrawBitmap(Rectf(pos1, tex->m_dwWidth, tex->m_dwHeight), 0.001f, tex, Color::white);
-				EERIEDrawBitmap(Rectf(pos2, tex->m_dwWidth, tex->m_dwHeight), 0.001f, tex, Color::white);
-				EERIEDrawBitmap(Rectf(pos3, tex->m_dwWidth, tex->m_dwHeight), 0.001f, tex, Color::white);
-				
-				iOffsetY += checked_range_cast<int>(fOffsetY);
-			}
-			
-			iOffsetY = checked_range_cast<int>(fBag);
-			
-			for(short i = 0; i < player.bag; i++) {
-				ARX_INTERFACE_DrawInventory(i, 0, iOffsetY);
-				iOffsetY += checked_range_cast<int>(fOffsetY);
-			}
-		}
-	}
-};
-
-static InventoryGui inventoryGui;
 
 static void DrawItemPrice() {
 	
@@ -731,7 +185,7 @@ static void DrawItemPrice() {
 		Vec2f pos = Vec2f(DANAEMouse);
 		pos += Vec2f(0, -10);
 		
-		if(InSecondaryInventoryPos(DANAEMouse)) {
+		if(g_secondaryInventoryHud.containsPos(DANAEMouse)) {
 			long amount=ARX_INTERACTIVE_GetPrice(FlyingOverIO,temp);
 			// achat
 			float famount = amount - amount * player.m_skillFull.intuition * 0.005f;
@@ -740,8 +194,8 @@ static void DrawItemPrice() {
 
 			Color color = (amount <= player.gold) ? Color::green : Color::red;
 			
-			ARX_INTERFACE_DrawNumber(pos, amount, 6, color);
-		} else if(InPlayerInventoryPos(DANAEMouse)) {
+			ARX_INTERFACE_DrawNumber(pos, amount, 6, color, 1.f);
+		} else if(g_playerInventoryHud.containsPos(DANAEMouse)) {
 			long amount = static_cast<long>( ARX_INTERACTIVE_GetPrice( FlyingOverIO, temp ) / 3.0f );
 			// achat
 			float famount = amount + amount * player.m_skillFull.intuition * 0.005f;
@@ -756,50 +210,12 @@ static void DrawItemPrice() {
 
 					color = Color::green;
 				}
-				ARX_INTERFACE_DrawNumber(pos, amount, 6, color);
+				ARX_INTERFACE_DrawNumber(pos, amount, 6, color, 1.f);
 			}
 		}
 	}
 }
 
-
-class HudIconBase : public HudItem {
-protected:
-	TextureContainer * m_tex;
-	bool m_isSelected;
-	
-	bool m_haloActive;
-	Color3f m_haloColor;
-	
-public:
-	HudIconBase()
-		: HudItem()
-		, m_tex(NULL)
-		, m_isSelected(false)
-		, m_haloActive(false)
-		, m_haloColor(Color3f::white)
-	{}
-	
-	//Used for drawing icons like the book or backpack icon.
-	void draw() {
-		arx_assert(m_tex);
-		
-		EERIEDrawBitmap(m_rect, 0.001f, m_tex, Color::white);
-		
-		if(m_isSelected) {
-			GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-			GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-			
-			EERIEDrawBitmap(m_rect, 0.001f, m_tex, Color::white);
-			
-			GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-		}
-		
-		if(m_haloActive && m_tex->getHalo()) {
-			ARX_INTERFACE_HALO_Render(m_haloColor, HALO_ACTIVE, m_tex->getHalo(), m_rect.topLeft());
-		}
-	}
-};
 
 extern TextureContainer * healing;
 
@@ -820,13 +236,13 @@ private:
 				break;
 			}
 			
-			pd->ov = pos - Vec3f(float(i * 2), float(i * 2), 0.f);
-			pd->move = Vec3f(-float(i) * 0.5f, -float(i) * 0.5f, 0.f);
-			pd->scale = Vec3f(float(i * 10), float(i * 10), 0.f);
+			pd->ov = pos - Vec3f(i * 2, i * 2, 0.f);
+			pd->move = Vec3f(i * -0.5f, i * -0.5f, 0.f);
+			pd->scale = Vec3f(i * 10, i * 10, 0.f);
 			pd->tolive = Random::get(1200, 1600);
 			pd->tc = m_tex;
-			pd->rgb = Color3f(1.f - float(i) * 0.1f, float(i) * 0.1f, 0.5f - float(i) * 0.1f);
-			pd->siz = 32.f + float(i * 4);
+			pd->rgb = Color3f(1.f - i * 0.1f, i * 0.1f, 0.5f - i * 0.1f);
+			pd->siz = 32.f + i * 4.f;
 			pd->is2D = true;
 		}
 		
@@ -886,7 +302,6 @@ public:
 
 			if(eeMouseDown1()) {
 				ARX_INTERFACE_BookToggle();
-				EERIEMouseButton &=~1;
 			}
 			return;
 		}
@@ -923,26 +338,34 @@ public:
 		{
 		static float flDelay=0;
 		
+		// Check for backpack Icon
+		if(m_rect.contains(Vec2f(DANAEMouse))) {
+			if(eeMouseUp1() && playerInventory.insert(DRAGINTER)) {
+				ARX_SOUND_PlayInterface(SND_INVSTD);
+				Set_DragInter(NULL);
+			}
+		}
+		
 		if(m_rect.contains(Vec2f(DANAEMouse)) || flDelay) {
 			eMouseState = MOUSE_IN_INVENTORY_ICON;
 			SpecialCursor = CURSOR_INTERACTION_ON;
-
-			if(EERIEMouseButton & 4) {
+			
+			
+			if(eeMouseDoubleClick1()) {
 				ARX_SOUND_PlayInterface(SND_BACKPACK, 0.9F + 0.2F * rnd());
 
 				playerInventory.optimize();
 
-				flDelay=0;
-				EERIEMouseButton&=~4;
-			} else if((eeMouseDown1()) || flDelay) {
+				flDelay = 0;
+			} else if(eeMouseDown1() || flDelay) {
 				if(!flDelay) {
-					flDelay=arxtime.get_updated();
+					flDelay = arxtime.get_updated();
 					return;
 				} else {
-					if((arxtime.get_updated() - flDelay) < 300) {
+					if(arxtime.get_updated() - flDelay < 300) {
 						return;
 					} else {
-						flDelay=0;
+						flDelay = 0;
 					}
 				}
 
@@ -953,8 +376,6 @@ public:
 					bInverseInventory=!bInverseInventory;
 					lOldTruePlayerMouseLook=TRUE_PLAYER_MOUSELOOK_ON;
 				}
-
-				EERIEMouseButton &=~1;
 			} else if(eeMouseDown2()) {
 				ARX_INTERFACE_BookClose();
 				ARX_INVENTORY_OpenClose(NULL);
@@ -980,8 +401,7 @@ public:
 						}
 					}
 				}
-
-				EERIEMouseButton &= ~2;
+				
 				TRUE_PLAYER_MOUSELOOK_ON = false;
 			}
 
@@ -1013,10 +433,9 @@ public:
 		m_size = Vec2f(32, 32);
 	}
 	
-	void update() {
-		Vec2f pos(static_cast<float>(-lSLID_VALUE), g_size.height() - (78 + 32));
+	void updateRect(const Rectf & parent) {
 		
-		m_rect = Rectf(pos, m_size.x, m_size.y);
+		m_rect = createChild(parent, Anchor_TopLeft, m_size * m_scale, Anchor_BottomLeft);
 	}
 	
 	void updateInput() {
@@ -1040,8 +459,6 @@ public:
 						bForceEscapeFreeLook=true;
 					    lOldTruePlayerMouseLook=!TRUE_PLAYER_MOUSELOOK_ON;
 					}
-
-					EERIEMouseButton &=~1;
 				}
 
 				if(DRAGINTER == NULL)
@@ -1058,101 +475,6 @@ public:
 
 static StealIconGui stealIconGui;
 
-class PickAllIconGui : public HudIconBase {
-private:
-	Vec2f m_size;
-	
-public:
-	void init() {
-		m_tex = TextureContainer::LoadUI("graph/interface/inventory/inv_pick");
-		arx_assert(m_tex);
-		
-		m_size = Vec2f(16, 16);
-	}
-	
-	void update() {
-		Rectf parent = Rectf(Vec2f(InventoryX, 0), BasicInventorySkin->m_dwWidth, BasicInventorySkin->m_dwHeight);
-		
-		Rectf spacer = createChild(parent, Anchor_BottomLeft, Vec2f(16, 16), Anchor_BottomLeft);
-		
-		m_rect = createChild(spacer, Anchor_BottomRight, m_size, Anchor_BottomLeft);
-	}
-	
-	void updateInput() {
-		
-		m_isSelected = m_rect.contains(Vec2f(DANAEMouse));
-		
-		if(m_isSelected) {
-			SpecialCursor=CURSOR_INTERACTION_ON;
-
-			if(eeMouseDown1()) {
-				// play un son que si un item est pris
-				ARX_INVENTORY_TakeAllFromSecondaryInventory();
-
-				EERIEMouseButton &=~1;
-			}
-
-			if(DRAGINTER == NULL)
-				return;
-		}
-	}
-};
-
-static PickAllIconGui pickAllIconGui;
-
-class CloseSecondaryInventoryIconGui : public HudIconBase {
-private:
-	Vec2f m_size;
-	
-public:
-	void init() {
-		m_tex = TextureContainer::LoadUI("graph/interface/inventory/inv_close");
-		arx_assert(m_tex);
-		
-		m_size = Vec2f(16, 16);
-	}
-	
-	void update() {
-		Rectf parent = Rectf(Vec2f(InventoryX, 0), BasicInventorySkin->m_dwWidth, BasicInventorySkin->m_dwHeight);
-		
-		Rectf spacer = createChild(parent, Anchor_BottomRight, Vec2f(16, 16), Anchor_BottomRight);
-		
-		m_rect = createChild(spacer, Anchor_BottomLeft, m_size, Anchor_BottomRight);
-	}
-	
-	void updateInput() {
-		
-		m_isSelected = m_rect.contains(Vec2f(DANAEMouse));
-		
-		if(m_isSelected) {
-			SpecialCursor=CURSOR_INTERACTION_ON;
-
-			if(eeMouseDown1()) {
-				Entity * io = NULL;
-
-				if(SecondaryInventory)
-					io = SecondaryInventory->io;
-				else if(player.Interface & INTER_STEAL)
-					io = ioSteal;
-
-				if(io) {
-					ARX_SOUND_PlayInterface(SND_BACKPACK, 0.9F + 0.2F * rnd());
-					InventoryDir=-1;
-					SendIOScriptEvent(io,SM_INVENTORY2_CLOSE);
-					TSecondaryInventory=SecondaryInventory;
-					SecondaryInventory=NULL;
-				}
-
-				EERIEMouseButton &=~1;
-			}
-
-			if(DRAGINTER == NULL)
-				return;
-		}
-	}
-};
-
-static CloseSecondaryInventoryIconGui closeSecondaryInventoryIconGui;
 
 class LevelUpIconGui : public HudIconBase {
 private:
@@ -1191,7 +513,6 @@ public:
 			
 			if(eeMouseDown1()) {
 				ARX_INTERFACE_BookOpen();
-				EERIEMouseButton &=~1;
 			}
 		}
 	}
@@ -1265,7 +586,7 @@ public:
 				   && !GInput->actionPressed(CONTROLS_CUST_MAGICMODE)
 				   && !COMBINE
 				   && !COMBINEGOLD
-				   && (EERIEMouseButton & 4)
+				   && eeMouseDoubleClick1()
 				) {
 					COMBINEGOLD = true;
 				}
@@ -1281,9 +602,9 @@ public:
 		
 		if(m_isSelected) {
 			Vec2f numberPos = m_rect.topLeft();
-			numberPos += Vec2f(- INTERFACE_RATIO(30), + INTERFACE_RATIO(10 - 25));
+			numberPos += Vec2f(-30 * m_scale, -15 * m_scale);
 			
-			ARX_INTERFACE_DrawNumber(numberPos, player.gold, 6, Color::white);
+			ARX_INTERFACE_DrawNumber(numberPos, player.gold, 6, Color::white, m_scale);
 		}
 	}
 };
@@ -1295,7 +616,7 @@ void purseIconGuiRequestHalo() {
 }
 
 
-class CurrentTorchIconGui {
+class CurrentTorchIconGui : public HudItem {
 private:
 	bool m_isActive;
 	Rectf m_rect;
@@ -1311,12 +632,15 @@ public:
 		return !(player.Interface & INTER_COMBATMODE) && player.torch;
 	}
 	
-	void updateRect() {
+	void updateRect(const Rectf & parent) {
 		
-		float px = INTERFACE_RATIO(std::max(InventoryX + 110.f, 10.f));
-		float py = g_size.height() - INTERFACE_RATIO(158.f + 32.f);
+		float secondaryInventoryX = InventoryX + 110.f;
 		
-		m_rect = Rectf(Vec2f(px, py), m_size.x, m_size.y);
+		m_rect = createChild(parent, Anchor_TopLeft, m_size * m_scale, Anchor_BottomLeft);
+		
+		if(m_rect.left < secondaryInventoryX) {
+			m_rect.move(secondaryInventoryX, 0.f);
+		}
 	}
 	
 	void updateInput() {
@@ -1336,13 +660,12 @@ public:
 					io->ignition=1;
 					Set_DragInter(io);
 				} else {
-					if((EERIEMouseButton & 4) && !COMBINE) {
+					if(eeMouseDoubleClick1() && !COMBINE) {
 						COMBINE = player.torch;
 					}
 
 					if(eeMouseUp2()) {
 						ARX_PLAYER_ClickedOnTorch(player.torch);
-						EERIEMouseButton &= ~2;
 						TRUE_PLAYER_MOUSELOOK_ON = false;
 					}
 				}
@@ -1369,26 +692,26 @@ public:
 			return;
 		}
 		
-		createFireParticle(m_rect.topLeft());
+		createFireParticle();
 	}
 	
-	void createFireParticle(Vec2f p) {
+	void createFireParticle() {
 		
 		PARTICLE_DEF * pd = createParticle();
 		if(!pd) {
 			return;
 		}
 		
+		Vec2f pos = m_rect.topLeft() + Vec2f(12.f - rnd() * 3.f, rnd() * 6.f) * m_scale;
+		
 		pd->special = FIRE_TO_SMOKE;
-		pd->ov = Vec3f(p.x + INTERFACE_RATIO(12.f - rnd() * 3.f),
-		               p.y + INTERFACE_RATIO(rnd() * 6.f), 0.0000001f);
-		pd->move = Vec3f(INTERFACE_RATIO(1.5f - rnd() * 3.f),
-		                 -INTERFACE_RATIO(5.f + rnd() * 1.f), 0.f);
+		pd->ov = Vec3f(pos, 0.0000001f);
+		pd->move = Vec3f((1.5f - rnd() * 3.f), -(5.f + rnd() * 1.f), 0.f) * m_scale;
 		pd->scale = Vec3f(1.8f, 1.8f, 1.f);
 		pd->tolive = Random::get(500, 900);
 		pd->tc = fire2;
 		pd->rgb = Color3f(1.f, .6f, .5f);
-		pd->siz = INTERFACE_RATIO(14.f);
+		pd->siz = 14.f * m_scale;
 		pd->is2D = true;
 	}
 	
@@ -1633,13 +956,9 @@ public:
 		}
 	}
 	
-	void draw() {
-		
-		EERIEDrawBitmap2DecalY(m_rect, 0.f, m_filledTex, m_color, (1.f - m_amount));
-		EERIEDrawBitmap(m_rect, 0.001f, m_emptyTex, Color::white);
-		
+	void updateInput(const Vec2f & mousePos) {
 		if(!(player.Interface & INTER_COMBATMODE)) {
-			if(m_rect.contains(Vec2f(DANAEMouse))) {
+			if(m_rect.contains(mousePos)) {
 				if(eeMouseDown1()) {
 					std::stringstream ss;
 					ss << checked_range_cast<int>(player.lifePool.current);
@@ -1647,6 +966,12 @@ public:
 				}
 			}
 		}
+	}
+	
+	void draw() {
+		
+		EERIEDrawBitmap2DecalY(m_rect, 0.f, m_filledTex, m_color, (1.f - m_amount));
+		EERIEDrawBitmap(m_rect, 0.001f, m_emptyTex, Color::white);
 	}
 };
 HealthGauge healthGauge;
@@ -1682,13 +1007,9 @@ public:
 		m_amount = player.manaPool.current / player.Full_maxmana;
 	}
 	
-	void draw() {
-		
-		EERIEDrawBitmap2DecalY(m_rect, 0.f, m_filledTex, Color::white, (1.f - m_amount));
-		EERIEDrawBitmap(m_rect, 0.001f, m_emptyTex, Color::white);
-		
+	void updateInput(const Vec2f & mousePos) {
 		if(!(player.Interface & INTER_COMBATMODE)) {
-			if(m_rect.contains(Vec2f(DANAEMouse))) {
+			if(m_rect.contains(mousePos)) {
 				if(eeMouseDown1()) {
 					std::stringstream ss;
 					ss << checked_range_cast<int>(player.manaPool.current);
@@ -1696,6 +1017,12 @@ public:
 				}
 			}
 		}
+	}
+	
+	void draw() {
+		
+		EERIEDrawBitmap2DecalY(m_rect, 0.f, m_filledTex, Color::white, (1.f - m_amount));
+		EERIEDrawBitmap(m_rect, 0.001f, m_emptyTex, Color::white);
 	}
 };
 ManaGauge manaGauge;
@@ -1836,9 +1163,8 @@ private:
 					}
 				}
 				
-				if(EERIEMouseButton & 4) {
+				if(eeMouseDoubleClick1()) {
 					ARX_SPELLS_Precast_Launch(m_precastIndex);
-					EERIEMouseButton &= ~4;
 				}
 			}
 		}
@@ -1966,9 +1292,8 @@ private:
 					}
 				}
 				
-				if(EERIEMouseButton & 4) {
+				if(eeMouseDoubleClick1()) {
 					ARX_SOUND_PlaySFX(SND_MAGIC_FIZZLE);
-					EERIEMouseButton &= ~4;
 					spells.endSpell(spells[spellIndex]);
 				}
 			}
@@ -2278,15 +1603,10 @@ void hudElementsInit() {
 	backpackIconGui.init();
 	levelUpIconGui.init();
 	stealIconGui.init();
-	secondaryInventory.init();
-	inventoryGui.init();
-	
-	BasicInventorySkin = TextureContainer::LoadUI("graph/interface/inventory/ingame_inventory");
-	arx_assert(BasicInventorySkin);
+	g_secondaryInventoryHud.init();
+	g_playerInventoryHud.init();
 	
 	purseIconGui.init();
-	pickAllIconGui.init();
-	closeSecondaryInventoryIconGui.init();
 	
 	hitStrengthGauge.init();
 	
@@ -2296,6 +1616,8 @@ void hudElementsInit() {
 void setHudScale(float scale) {
 	hitStrengthGauge.setScale(scale);
 	healthGauge.setScale(scale);
+	stealIconGui.setScale(scale);
+	currentTorchIconGui.setScale(scale);
 	
 	manaGauge.setScale(scale);
 	backpackIconGui.setScale(scale);
@@ -2313,9 +1635,14 @@ void setHudScale(float scale) {
 	stealthGauge.setScale(scale);
 	damagedEquipmentGui.setScale(scale);
 	precastSpellsGui.setScale(scale);
+	
+	g_playerInventoryHud.setScale(scale);
+	g_secondaryInventoryHud.setScale(scale);
 }
 
 void ArxGame::drawAllInterface() {
+	
+	const Vec2f mousePos = Vec2f(DANAEMouse);
 	
 	Rectf hudSlider = Rectf(g_size);
 	hudSlider.left  -= lSLID_VALUE;
@@ -2325,8 +1652,8 @@ void ArxGame::drawAllInterface() {
 	hitStrengthGauge.updateRect(Rectf(g_size));
 	hitStrengthGauge.update();
 	
-	secondaryInventory.update();
-	inventoryGui.update();
+	g_secondaryInventoryHud.update();
+	g_playerInventoryHud.update();
 	mecanismIcon.update();
 	screenArrows.update();
 	
@@ -2336,7 +1663,7 @@ void ArxGame::drawAllInterface() {
 	quickSaveIconGui.update();
 	
 	
-	Vec2f anchorPos = getInventoryGuiAnchorPosition();
+	Vec2f anchorPos = g_playerInventoryHud.anchorPosition();
 	
 	Rectf spacer;
 	spacer.left = std::max(InventoryX + 160, healthGauge.rect().right);
@@ -2361,8 +1688,8 @@ void ArxGame::drawAllInterface() {
 		hitStrengthGauge.draw();
 	}	
 	
-	secondaryInventory.draw();
-	inventoryGui.draw();
+	g_secondaryInventoryHud.draw();
+	g_playerInventoryHud.draw();
 	
 	if(FlyingOverIO 
 		&& !(player.Interface & INTER_COMBATMODE)
@@ -2375,28 +1702,22 @@ void ArxGame::drawAllInterface() {
 		SpecialCursor=CURSOR_INTERACTION_ON;
 	}
 	
+	healthGauge.updateRect(hudSlider);
+	healthGauge.updateInput(mousePos);
+	healthGauge.update();
+	
+	stealIconGui.updateRect(healthGauge.rect());
+	
 	damagedEquipmentGui.draw();
 	
 	if(!(player.Interface & INTER_COMBATMODE) && (player.Interface & INTER_MINIBACK)) {
 		
 		if(player.Interface & INTER_STEAL) {
-			stealIconGui.update();
 			stealIconGui.draw();			
-		}
-		// Pick All/Close Secondary Inventory
-		if(TSecondaryInventory) {
-			//These have to be calculated on each frame (to make them move).
-			pickAllIconGui.update();
-			closeSecondaryInventoryIconGui.update();
-			
-			Entity *temp = TSecondaryInventory->io;
-			if(temp && !(temp->ioflags & IO_SHOP) && !(temp == ioSteal)) {
-				pickAllIconGui.draw();
-			}
-			closeSecondaryInventoryIconGui.draw();
 		}
 	}
 	
+	currentTorchIconGui.updateRect(stealIconGui.rect());
 	currentTorchIconGui.update();
 	currentTorchIconGui.draw();
 	
@@ -2411,8 +1732,8 @@ void ArxGame::drawAllInterface() {
 		GRenderer->SetRenderState(Renderer::DepthWrite, true);
 		
 		if((player.Interface & INTER_MAP) && !(player.Interface & INTER_COMBATMODE)) {
-			if(Book_Mode == BOOKMODE_SPELLS) {
-				gui::ARX_INTERFACE_ManageOpenedBook_Finish();
+			if(g_guiBookCurrentTopTab == BOOKMODE_SPELLS) {
+				gui::ARX_INTERFACE_ManageOpenedBook_Finish(mousePos);
 				ARX_INTERFACE_ManageOpenedBook_SpellsDraw();
 			}
 		}
@@ -2422,12 +1743,12 @@ void ArxGame::drawAllInterface() {
 		memorizedRunesHud.draw();
 	}
 	
-	healthGauge.updateRect(hudSlider);
-	healthGauge.update();
+
 	
 	
 	if(player.Interface & INTER_LIFE_MANA) {
 		manaGauge.update(hudSlider);
+		manaGauge.updateInput(mousePos);
 		manaGauge.draw();
 		
 		healthGauge.draw();
@@ -2482,7 +1803,7 @@ void ArxGame::drawAllInterface() {
 	
 	precastSpellsGui.draw();
 	activeSpellsGui.update(hudSlider);
-	activeSpellsGui.updateInput(Vec2f(DANAEMouse));
+	activeSpellsGui.updateInput(mousePos);
 	activeSpellsGui.draw();
 }
 
@@ -2492,7 +1813,6 @@ void hudUpdateInput() {
 		if(!(player.Interface & INTER_COMBATMODE)) {
 			if(!TRUE_PLAYER_MOUSELOOK_ON) {
 				
-				currentTorchIconGui.updateRect();
 				currentTorchIconGui.updateInput();
 				levelUpIconGui.updateInput();
 				purseIconGui.updateInput();
@@ -2505,31 +1825,4 @@ void hudUpdateInput() {
 			stealIconGui.updateInput();
 		}
 	}
-}
-
-void manageEditorControlsHUD2()
-{
-	if(TSecondaryInventory) {
-		
-		Entity * temp = TSecondaryInventory->io;
-
-		if(temp && !(temp->ioflags & IO_SHOP) && !(temp == ioSteal)) {
-			pickAllIconGui.updateInput();
-		}
-		
-		closeSecondaryInventoryIconGui.updateInput();
-	}
-}
-
-
-bool inventoryGuiupdateInputPROXY()
-{
-	return inventoryGui.updateInput();
-}
-
-
-Vec2f getInventoryGuiAnchorPosition() {
-	
-	return Vec2f(g_size.center().x - INTERFACE_RATIO(320) + INTERFACE_RATIO(35) ,
-	g_size.height() - INTERFACE_RATIO(101) + INTERFACE_RATIO_LONG(InventoryY));
 }

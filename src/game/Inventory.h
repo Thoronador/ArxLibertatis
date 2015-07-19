@@ -87,7 +87,6 @@ extern INVENTORY_DATA * TSecondaryInventory;
 extern Entity * DRAGINTER;
 extern Entity * ioSteal;
 extern long InventoryY;
-extern short sActiveInventory;
 
 inline Vec2s inventorySizeFromTextureSize(Vec2i size) {
 	return Vec2s(glm::clamp((size + Vec2i(31, 31)) / Vec2i(32, 32), Vec2i(1, 1), Vec2i(3, 3)));
@@ -247,6 +246,8 @@ InventoryPos removeFromInventories(Entity * item);
  */
 bool putInInventory(Entity * item, const InventoryPos & pos);
 
+void ARX_INVENTORY_Declare_InventoryIn(Entity * io);
+
 void PutInFrontOfPlayer(Entity * io);
 
 Vec3f GetItemWorldPosition(Entity * io);
@@ -255,21 +256,21 @@ Vec3f GetItemWorldPositionSound(const Entity * io);
 Entity * GetInventoryObj_INVENTORYUSE(const Vec2s & pos);
 void CheckForInventoryReplaceMe(Entity * io, Entity * old);
 
-bool InSecondaryInventoryPos(const Vec2s & pos);
-bool InPlayerInventoryPos(const Vec2s & pos);
 bool CanBePutInSecondaryInventory(INVENTORY_DATA * id, Entity * io);
 
 void CleanInventory();
 void SendInventoryObjectCommand(const std::string & _lpszText, ScriptMessage _lCommand);
-bool PutInInventory();
+void PutInInventory();
 bool TakeFromInventory(const Vec2s & pos);
 Entity * GetFromInventory(const Vec2s & pos);
-bool IsFlyingOverInventory(const Vec2s & pos);
 bool IsInPlayerInventory(Entity * io);
 bool IsInSecondaryInventory(Entity * io);
 bool InInventoryPos(const Vec2s & pos);
 void RemoveFromAllInventories(const Entity * io);
 Entity * ARX_INVENTORY_GetTorchLowestDurability();
+long Player_Arrow_Count();
+Entity * Player_Arrow_Count_Decrease();
+
 void ARX_INVENTORY_IdentifyAll();
 void ARX_INVENTORY_OpenClose(Entity * io);
 void ARX_INVENTORY_TakeAllFromSecondaryInventory();

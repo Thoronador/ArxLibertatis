@@ -182,7 +182,7 @@ long ADDED_IO_NOT_SAVED = 0;
 #endif
 
 Vec2s DANAEMouse;
-Vec3f moveto;
+Vec3f g_moveto;
 Vec3f Mscenepos;
 Vec3f lastteleport;
 EERIE_3DOBJ * GoldCoinsObj[MAX_GOLD_COINS_VISUALS];// 3D Objects For Gold Coins
@@ -249,6 +249,8 @@ extern EERIE_CAMERA * ACTIVECAM;
 
 
 bool g_debugToggles[10];
+bool g_debugTriggers[10];
+u32 g_debugTriggersTime[10] = {0};
 
 // Sends ON GAME_READY msg to all IOs
 void SendGameReadyMsg()
@@ -422,7 +424,6 @@ void levelInit() {
 	
 	STARTDRAG = Vec2s_ZERO;
 	DANAEMouse = Vec2s_ZERO;
-	bookclick = false;
 	
 	if(LOAD_N_ERASE)
 		arxtime.init();
@@ -553,7 +554,7 @@ void levelInit() {
 	MagicFlareSetCamera(&subj);
 	
 	lastteleport = player.basePosition();
-	subj.orgTrans.pos = moveto = player.pos;
+	subj.orgTrans.pos = g_moveto = player.pos;
 
 	subj.angle = player.angle;
 	
@@ -676,43 +677,6 @@ void ManageNONCombatModeAnimations() {
 	}
 }
 
-static long Player_Arrow_Count() {
-	
-	long count = 0;
-	
-	arx_assert(player.bag >= 0);
-	arx_assert(player.bag <= 3);
-	
-	for(size_t bag = 0; bag < size_t(player.bag); bag++)
-	for(size_t y = 0; y < INVENTORY_Y; y++)
-	for(size_t x = 0; x < INVENTORY_X; x++) {
-		INVENTORY_SLOT & slot = inventory[bag][x][y];
-		
-		if(slot.io && slot.io->className() == "arrows" && slot.io->durability >= 1.f) {
-			count += checked_range_cast<long>(slot.io->durability);
-		}
-	}
-	
-	return count;
-}
-
-static Entity * Player_Arrow_Count_Decrease() {
-	
-	Entity * io = NULL;
-	
-	for(size_t bag = 0; bag < size_t(player.bag); bag++)
-	for(size_t y = 0; y < INVENTORY_Y; y++)
-	for(size_t x = 0; x < INVENTORY_X; x++) {
-		INVENTORY_SLOT & slot = inventory[bag][x][y];
-		
-		if(slot.io && slot.io->className() == "arrows" && slot.io->durability >= 1.f) {
-			if(!io || io->durability > slot.io->durability)
-				io = slot.io;
-		}
-	}
-	
-	return io;
-}
 float GLOBAL_SLOWDOWN=1.f;
 
 static bool StrikeAimtime() {

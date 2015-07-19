@@ -24,14 +24,6 @@
 
 extern bool bIsAiming;
 
-namespace gui {
-
-void InventoryFaderUpdate();
-
-void CloseSecondaryInventory();
-
-}
-
 void hudElementsInit();
 
 void setHudScale(float scale);
@@ -48,10 +40,5 @@ void bookIconGuiRequestHalo();
 void hideQuickSaveIcon();
 
 void hudUpdateInput();
-void manageEditorControlsHUD2();
-
-bool inventoryGuiupdateInputPROXY();
-
-Vec2f getInventoryGuiAnchorPosition();
 
 #endif // ARX_GUI_HUD_H

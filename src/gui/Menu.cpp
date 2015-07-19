@@ -93,10 +93,8 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "util/Unicode.h"
 
 extern TextManager * pTextManage;
-extern ARX_INTERFACE_BOOK_MODE Book_Mode;
+extern ARX_INTERFACE_BOOK_MODE g_guiBookCurrentTopTab;
 extern long START_NEW_QUEST;
-extern long LASTBOOKBUTTON;
-extern long BOOKBUTTON;
 extern long OLD_FLYING_OVER;
 extern long FLYING_OVER;
 extern bool bFadeInOut;
@@ -251,7 +249,7 @@ void ARX_MENU_Clicked_NEWQUEST() {
 	REFUSE_GAME_RETURN = 1;
 	
 	ARX_PLAYER_Start_New_Quest();
-	Book_Mode = BOOKMODE_STATS;
+	g_guiBookCurrentTopTab = BOOKMODE_STATS;
 	player.skin = 0;
 	ARX_PLAYER_Restore_Skin();
 	ARXmenu.currentmode = AMCM_NEWQUEST;
@@ -375,15 +373,6 @@ bool ARX_Menu_Render() {
 	if(ARXmenu.currentmode == AMCM_OFF)
 		return false;
 
-	if(GInput->getMouseButton(Mouse::Button_0)) {
-		EERIEMouseButton = 1;
-		LastMouseClick = 1;
-	} else if(GInput->getMouseButton(Mouse::Button_1)) {
-		EERIEMouseButton = 2;
-		LastMouseClick = 2;
-	} else {
-		EERIEMouseButton = 0;
-	}
 
 	GRenderer->Clear(Renderer::ColorBuffer | Renderer::DepthBuffer);
 	
@@ -415,9 +404,6 @@ bool ARX_Menu_Render() {
 
 			if(player.Skill_Redistribute == 0 && player.Attribute_Redistribute == 0)
 				DONE = 1;
-			
-			LASTBOOKBUTTON = BOOKBUTTON;
-			BOOKBUTTON = EERIEMouseButton;
 			
 			if(!ARXmenu.mda->flyover[FLYING_OVER].empty() ) //=ARXmenu.mda->flyover[FLYING_OVER];
 			{

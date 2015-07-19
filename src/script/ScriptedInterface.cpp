@@ -51,6 +51,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "gui/Interface.h"
 #include "gui/Menu.h"
 #include "gui/MiniMap.h"
+#include "gui/hud/SecondaryInventory.h"
 #include "scene/GameSound.h"
 #include "script/ScriptEvent.h"
 #include "script/ScriptUtils.h"
@@ -69,13 +70,13 @@ public:
 		
 		HandleFlags("aem") {
 			if(flg & flag('a')) { // Magic
-				Book_Mode = BOOKMODE_MINIMAP;
+				g_guiBookCurrentTopTab = BOOKMODE_MINIMAP;
 			}
 			if(flg & flag('e')) { // Equip
-				Book_Mode = BOOKMODE_SPELLS;
+				g_guiBookCurrentTopTab = BOOKMODE_SPELLS;
 			}
 			if(flg & flag('m')) { // Map
-				Book_Mode = BOOKMODE_QUESTS;
+				g_guiBookCurrentTopTab = BOOKMODE_QUESTS;
 			}
 		}
 		
@@ -112,7 +113,7 @@ public:
 			return Success;
 		}
 		
-		gui::CloseSecondaryInventory();
+		g_secondaryInventoryHud.close();
 		
 		return Success;
 	}

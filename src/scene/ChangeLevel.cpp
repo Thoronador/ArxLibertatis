@@ -73,6 +73,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "gui/MiniMap.h"
 #include "gui/Hud.h"
 #include "gui/Interface.h"
+#include "gui/hud/SecondaryInventory.h"
 
 #include "graphics/GraphicsModes.h"
 #include "graphics/Math.h"
@@ -315,7 +316,7 @@ void ARX_CHANGELEVEL_Change(const std::string & level, const std::string & targe
 		EntityHandle t = entities.getById(target);
 		if(t > 0 && entities[t]) {
 			Vec3f pos = GetItemWorldPosition(entities[t]);
-			moveto = player.pos = pos + player.baseOffset();
+			g_moveto = player.pos = pos + player.baseOffset();
 			PLAYER_POSITION_RESET = false;
 		}
 		player.desiredangle.setPitch(angle);
@@ -348,9 +349,9 @@ void ARX_CHANGELEVEL_Change(const std::string & level, const std::string & targe
 	if(t > 0 && entities[t]) {
 		Vec3f pos = GetItemWorldPosition(entities[t]);
 		
-		moveto = player.pos = pos + player.baseOffset();
+		g_moveto = player.pos = pos + player.baseOffset();
 		PLAYER_POSITION_RESET = false;
-		WILL_RESTORE_PLAYER_POSITION = moveto;
+		WILL_RESTORE_PLAYER_POSITION = g_moveto;
 		WILL_RESTORE_PLAYER_POSITION_FLAG = 1;
 	}
 	
@@ -371,7 +372,7 @@ static bool ARX_CHANGELEVEL_PushLevel(long num, long newnum) {
 	ARX_SCRIPT_EventStackExecuteAll();
 	
 	// Close secondary inventory before leaving
-	gui::CloseSecondaryInventory();
+	g_secondaryInventoryHud.close();
 	
 	// Now we can save our things
 	if(!ARX_CHANGELEVEL_Push_Index(num)) {
@@ -1617,12 +1618,10 @@ static long ARX_CHANGELEVEL_Pop_Level(ARX_CHANGELEVEL_INDEX * asi, long num,
 
 static long ARX_CHANGELEVEL_Pop_Player() {
 	
-	const std::string & loadfile = "player";
-	
 	size_t size;
-	char * dat = g_currentSavedGame->load(loadfile, size);
+	char * dat = g_currentSavedGame->load("player", size);
 	if(!dat) {
-		LogError << "Unable to Open " << loadfile << " for Read...";
+		LogError << "Unable to Open player for Read...";
 		return -1;
 	}
 	

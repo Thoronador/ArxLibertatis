@@ -248,7 +248,7 @@ float Cedric_GetInvisibility(Entity *io) {
 
 			if(spell) {
 				if(player.m_skillFull.intuition > spell->m_level * 10) {
-					invisibility -= (float)player.m_skillFull.intuition * (1.0f / 100)
+					invisibility -= player.m_skillFull.intuition * (1.0f / 100)
 									+ (float)spell->m_level * (1.0f / 10);
 
 					invisibility = glm::clamp(invisibility, 0.1f, 1.f);
@@ -355,7 +355,7 @@ void Cedric_ApplyLightingFirstPartRefactor(Entity *io) {
 
 							ARX_PARTICLES_Spawn_Splat(sp.origin, 200.f, io->_npcdata->blood_color);
 
-							sp.origin = io->pos + Vec3f(rnd(),rnd(),rnd()) * Vec3f(200.f, 20.f,200.f) - Vec3f(100.f, 10.f, 100.f);
+							sp.origin = io->pos + randomVec3f() * Vec3f(200.f, 20.f,200.f) - Vec3f(100.f, 10.f, 100.f);
 							sp.radius = rnd() * 100.f + 100.f;
 						}
 
@@ -1244,7 +1244,9 @@ static void StoreEntityMovement(Entity * io, Vec3f & ftr, float scale) {
 
 	if(!io)
 		return;
-
+	
+	arx_assert(isallfinite(ftr));
+	
 	Vec3f ftr2 = Vec3f_ZERO;
 
 	ftr *= scale;
@@ -1274,9 +1276,6 @@ static void StoreEntityMovement(Entity * io, Vec3f & ftr, float scale) {
 
 		io->lastmove = ftr2;
 	}
-	
-	arx_assert(isallfinite(io->move));
-	arx_assert(isallfinite(io->lastmove));
 }
 
 /*!

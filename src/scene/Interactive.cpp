@@ -166,15 +166,11 @@ static float ARX_INTERACTIVE_fGetPrice(Entity * io, Entity * shop) {
 	
 	if(!io || !(io->ioflags & IO_ITEM))
 		return 0;
-
+	
+	float shop_multiply = shop ? shop->shop_multiply : 1.f;
 	float durability_ratio = io->durability / io->max_durability;
-	float shop_multiply = 1.f;
-
-	if(shop)
-		shop_multiply = shop->shop_multiply;
-
+	
 	return io->_itemdata->price * shop_multiply * durability_ratio;
-
 }
 
 long ARX_INTERACTIVE_GetPrice(Entity * io, Entity * shop) {
@@ -1235,7 +1231,7 @@ void ARX_INTERACTIVE_Teleport(Entity * io, const Vec3f & target, bool flag) {
 	io->room = -1;
 	
 	if(io == entities.player()) {
-		moveto = player.pos = target + player.baseOffset();
+		g_moveto = player.pos = target + player.baseOffset();
 	}
 	
 	// In case it is being dragged... (except for drag teleport update)
@@ -1891,7 +1887,7 @@ Entity * GetFirstInterAtPos(const Vec2s & pos, long flag, Vec3f * _pRef, Entity 
 		// Is Object Displayed on screen ???
 		if( !((io->show == SHOW_FLAG_IN_SCENE) ||
 			  (bPlayerEquiped && flag) ||
-			  (bPlayerEquiped && (player.Interface & INTER_MAP) && (Book_Mode == BOOKMODE_STATS))) )
+			  (bPlayerEquiped && (player.Interface & INTER_MAP) && (g_guiBookCurrentTopTab == BOOKMODE_STATS))) )
 			//((io->show==9) && (player.Interface & INTER_MAP)) )
 		{
 			continue;
@@ -1989,7 +1985,7 @@ bool IsEquipedByPlayer(const Entity * io)
 extern long LOOKING_FOR_SPELL_TARGET;
 Entity * InterClick(const Vec2s & pos) {
 	
-	if(IsFlyingOverInventory(pos)) {
+	if(InInventoryPos(pos)) {
 		return NULL;
 	}
 
